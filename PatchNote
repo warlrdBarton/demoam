@@ -1,0 +1,5 @@
+# v1.0.0 Basic 2-thread VSLAM Framework 
+Input: Kitti Stereo;
+Feature: GFTT && calcOpticalFlowPyrLK;
+Pose Estimation: Interframe Pose Only BA (Frontend) && Local BA with poses and mappoints within sliding window (Backend);
+Loop Closure: Not Available;
