@@ -10,14 +10,14 @@
 #include "g2o_types.h"
 #include "feature.h"
 #include "viewer.h"
+#include "feature_tracker.h"
 
 
 namespace demoam {
 Frontend::Frontend() {
     num_features_init_ = Config::Get<int>("num_features_init");
     num_features_ = Config::Get<int>("num_features");
-    gftt_ = cv::GFTTDetector::create(num_features_, 0.01, 20);
-    save_to_file_.open("./pose_per_frame.txt", std::ios::trunc);
+    save_to_file_.open("./traj.txt", std::ios::trunc);
 }
 
 void Frontend::Stop() {
@@ -44,8 +44,8 @@ bool Frontend::AddFrame(std::shared_ptr<Frame> frame) {
 }
 
 bool Frontend::StereoInit() {
-    DetectFeatures();
-    if (TrackFeaturesInRight() < num_features_init_) {
+    FeatureTracker::DetectFastInLeft(current_frame_);
+    if (FeatureTracker::SearchInRightOpticalFlow(current_frame_, camera_right_) < num_features_init_) {
         return false;
     } 
     bool build_map_success = BuildInitMap();
@@ -58,58 +58,6 @@ bool Frontend::StereoInit() {
         return true;
     }
     return false;       
-}
-
-int Frontend::DetectFeatures() {
-    cv::Mat mask(current_frame_ -> img_left_.size(), CV_8UC1, 255);
-    for (auto& feat : current_frame_ -> features_left_) {
-        cv::rectangle(mask, feat->position_.pt - cv::Point2f(10, 10),
-                      feat->position_.pt + cv::Point2f(10, 10), 0, cv::FILLED);
-    }
-    std::vector<cv::KeyPoint> keypoints;
-    gftt_ -> detect(current_frame_ -> img_left_, keypoints, mask);
-    int cntDetected = 0;
-    for (auto& kp : keypoints) {
-        current_frame_ -> features_left_.push_back(
-            std::shared_ptr<Feature>(new Feature(current_frame_, kp))
-        );
-        cntDetected++;
-    }
-    return cntDetected;
-}
-
-int Frontend::TrackFeaturesInRight() {
-    std::vector<cv::Point2f> kps_left, kps_right;
-    for (auto& kp : current_frame_ -> features_left_) {
-        kps_left.push_back(kp -> position_.pt);
-        auto mp = kp -> mappoint_.lock();
-        if (mp) {
-            auto px = camera_right_ -> world2pixel(mp -> pos_, current_frame_ -> Pose());
-            kps_right.push_back(cv::Point2f(px[0], px[1]));
-        } else {
-            kps_right.push_back(kp -> position_.pt);
-        }
-    }
-
-    std::vector<uchar> status;
-    std::vector<float> error;
-    cv::calcOpticalFlowPyrLK(current_frame_ -> img_left_, current_frame_ -> img_right_, 
-                             kps_left, kps_right, status, error, cv::Size(11, 11)
-    );
-
-    int num_good_pts = 0;
-    for (size_t i = 0; i < status.size(); ++i) {
-        if (status[i]) {
-            cv::KeyPoint kp(kps_right[i], 7);
-            std::shared_ptr<Feature> new_feature(new Feature(current_frame_, kp));
-            new_feature -> is_on_left_image_ = false;
-            current_frame_ -> features_right_.push_back(new_feature);
-            num_good_pts++;
-        } else {
-            current_frame_ -> features_right_.push_back(nullptr);
-        }
-    }
-    return num_good_pts;
 }
 
 bool Frontend::BuildInitMap() {
@@ -149,7 +97,7 @@ bool Frontend::Track() {
     if (last_frame_) {
         current_frame_ -> SetPose(relative_motion_ * last_frame_ -> Pose());
     }
-    TrackLastFrame();
+    FeatureTracker::SearchLastFrameOpticalFlow(last_frame_, current_frame_, camera_left_);
     tracking_inliners_ = EstimateCurrentPose();
     
     if (tracking_inliners_ > num_features_tracking_) {
@@ -165,37 +113,6 @@ bool Frontend::Track() {
     
     if (viewer_) viewer_ -> AddCurrentFrame(current_frame_);
     return true; 
-}
-
-int Frontend::TrackLastFrame() {
-    std::vector<cv::Point2f> kps_last, kps_current;
-    for (auto& kp : last_frame_ -> features_left_) {
-        kps_last.push_back(kp -> position_.pt);
-        auto mp = kp -> mappoint_.lock();
-        if (mp) {
-            auto px = camera_left_ -> world2pixel(mp -> pos_, current_frame_ -> Pose());
-            kps_current.push_back(cv::Point2f(px[0], px[1]));
-        } else {
-            kps_current.push_back(kp -> position_.pt);
-        }
-    }
-    std::vector<uchar> status;
-    std::vector<float> error;
-    cv::calcOpticalFlowPyrLK(last_frame_ -> img_left_, current_frame_ -> img_left_, 
-                             kps_last, kps_current, status, error, cv::Size(11, 11)
-    );
-    int num_good_pts = 0;
-    for (size_t i = 0; i < status.size(); ++i) {
-        if (status[i]) {
-            cv::KeyPoint kp(kps_current[i], 7);
-            std::shared_ptr<Feature> new_feature(new Feature(current_frame_, kp));
-            new_feature -> mappoint_ = last_frame_ -> features_left_[i] -> mappoint_;
-            current_frame_ -> features_left_.push_back(new_feature);
-            num_good_pts++;
-        }
-    }
-    LOG(INFO) << "Frontend::TrackLastFrame(): " << num_good_pts << " features tracked from last frame";
-    return num_good_pts;
 }
 
 int Frontend::EstimateCurrentPose() {
@@ -284,8 +201,8 @@ bool Frontend::InsertKeyFrame() {
     LOG(INFO) << "Frontend::InsertKeyFrame(): Set frame " << current_frame_ -> id_ << " as keyframe " << current_frame_ -> keyframe_id_;
 
     SetObservationsForKeyFrame();
-    DetectFeatures();  
-    TrackFeaturesInRight();
+    FeatureTracker::DetectFastInLeft(current_frame_);
+    FeatureTracker::SearchInRightOpticalFlow(current_frame_, camera_right_);
     TriangulateNewPoints();
 
     backend_-> UpdateMap();
@@ -339,6 +256,7 @@ int Frontend::TriangulateNewPoints() {
 bool Frontend::Reset() {
     return true;
 }
+
 void Frontend::SaveTrajectoryKITTI() {
     Sophus::SE3d current_pose_Twc = current_frame_ -> Pose().inverse();
     for (int i = 0; i < 3; ++i) {

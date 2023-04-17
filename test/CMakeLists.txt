@@ -1,2 +1,2 @@
-add_executable(gtest_main gtest_main.cpp)
-target_link_libraries(gtest_main demoam ${THIRD_PARTY_LIBS})
+add_executable(stereo_kitti stereo_kitti.cpp)
+target_link_libraries(stereo_kitti demoam ${THIRD_PARTY_LIBS})

@@ -36,12 +36,9 @@ class Frontend {
  
  private:
     bool StereoInit();
-    int DetectFeatures();
-    int TrackFeaturesInRight();
     bool BuildInitMap();
     bool Track();
     bool Reset();
-    int TrackLastFrame();
     int EstimateCurrentPose();
     bool InsertKeyFrame();
     void SetObservationsForKeyFrame();
@@ -49,7 +46,6 @@ class Frontend {
     void SaveTrajectoryKITTI();
 
 
-    std::shared_ptr<cv::GFTTDetector> gftt_;
     std::ofstream save_to_file_;
 
     // Data
