@@ -7,6 +7,8 @@
 #include "frame.h"
 #include "viewer.h"
 
+//#define TEST
+
 namespace demoam {
 VisualOdometry::VisualOdometry(std::string config_path) 
     : config_file_path_(config_path) {}
@@ -37,9 +39,15 @@ bool VisualOdometry::Init() {
 
 void VisualOdometry::Run() {
     LOG(INFO) << "VisualOdometry::Run(): Visual Odometry starts...";
+    #ifdef TEST
+        int iter = 0;
+    #endif
     while (true) {
         if (!VisualOdometry::Step()) break;
         LOG(INFO) << "\n\n\n";
+        #ifdef TEST
+            if (iter++ > 400) break;
+        #endif
     }
     frontend_ -> Stop();
     backend_ -> Stop();
