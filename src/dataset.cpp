@@ -1,9 +1,13 @@
 #include "dataset.h"
+
 #include <boost/format.hpp>
+#include <glog/logging.h>
+
 #include "camera.h"
 #include "frame.h"
 
 namespace demoam {
+    
 Dataset::Dataset(const std::string& dataset_path) : dataset_path_(dataset_path) {}
 
 bool Dataset::Init() {
@@ -67,5 +71,6 @@ std::shared_ptr<Frame> Dataset::NextFrame() {
     current_image_index_++;
     return new_frame;
 }
-}
+
+} // namespace demoam
 

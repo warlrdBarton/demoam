@@ -1,4 +1,5 @@
-#pragma once
+#ifndef DEMOAM__MAP_H
+#define DEMOAM__MAP_H
 
 #include "common_include.h"
 
@@ -8,7 +9,7 @@ class MapPoint;
 
 class Map {
  public:
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW 
     Map(){
     }
     void InsertKeyFrame(std::shared_ptr<Frame> frame);
@@ -44,4 +45,7 @@ class Map {
     size_t num_active_keyframes_ = 7;
  
 };
-}
+
+} // namespace demoam
+
+#endif // DEMOAM__MAP_H

@@ -1,4 +1,8 @@
 #include "visual_odometry.h"
+
+#include <chrono>
+#include <glog/logging.h>
+
 #include "config.h"
 #include "dataset.h"
 #include "frontend.h"
@@ -10,6 +14,7 @@
 //#define TEST
 
 namespace demoam {
+
 VisualOdometry::VisualOdometry(std::string config_path) 
     : config_file_path_(config_path) {}
 
@@ -40,13 +45,13 @@ bool VisualOdometry::Init() {
 void VisualOdometry::Run() {
     LOG(INFO) << "VisualOdometry::Run(): Visual Odometry starts...";
     #ifdef TEST
-        int iter = 0;
+    int iter = 0;
     #endif
     while (true) {
         if (!VisualOdometry::Step()) break;
         LOG(INFO) << "\n\n\n";
         #ifdef TEST
-            if (iter++ > 400) break;
+        if (iter++ > 400) break;
         #endif
     }
     frontend_ -> Stop();
@@ -66,4 +71,4 @@ bool VisualOdometry::Step() {
     return success;
 }
 
-}
+} // namespace demoam

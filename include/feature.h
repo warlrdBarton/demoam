@@ -1,4 +1,5 @@
-#pragma once
+#ifndef DEMOAM__FEATURE_H
+#define DEMOAM__FEATURE_H
 
 #include "common_include.h"
 
@@ -7,7 +8,7 @@ struct Frame;
 struct MapPoint;
 
 struct Feature {
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW    
     Feature(){}
     Feature(std::shared_ptr<Frame> frame, const cv::KeyPoint& kp)
         : position_(kp), frame_(frame) {     
@@ -19,4 +20,7 @@ struct Feature {
     bool is_outlier_ = false;
     bool is_on_left_image_ = true;
 };
-}
+
+} // namespace demoam
+
+#endif // DEMOAM__FEATURE_H

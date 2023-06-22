@@ -1,4 +1,7 @@
 #include "map.h"
+
+#include <glog/logging.h>
+
 #include "frame.h"
 #include "mappoint.h"
 #include "feature.h"

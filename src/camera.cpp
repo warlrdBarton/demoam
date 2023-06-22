@@ -1,6 +1,7 @@
 #include "camera.h"
 
 namespace demoam {
+    
 Eigen::Vector3d Camera::world2camera(const Eigen::Vector3d& pw, const Sophus::SE3d& tcw) {
     return pose_ * tcw * pw;
 }
@@ -27,4 +28,5 @@ Eigen::Vector3d Camera::pixel2world(const Eigen::Vector2d& pp, const Sophus::SE3
 Eigen::Vector2d Camera::world2pixel(const Eigen::Vector3d& pw, const Sophus::SE3d& tcw) {
     return camera2pixel(world2camera(pw, tcw));
 }
-}
+
+} // namespace demoam

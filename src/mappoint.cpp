@@ -1,4 +1,5 @@
 #include "mappoint.h"
+
 #include "feature.h"
 
 namespace demoam {
@@ -22,4 +23,5 @@ void MapPoint::RemoveObservation(std::shared_ptr<Feature> feature) {
         }
     }
 }
-}
+
+} // namespace demoam

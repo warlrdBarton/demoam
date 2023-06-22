@@ -1,3 +1,5 @@
+# v1.0.1 change GFTT to FAST
+
 # v1.0.0 Basic 2-thread VSLAM Framework 
 Input: Kitti Stereo;
 Feature: GFTT && calcOpticalFlowPyrLK;

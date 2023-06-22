@@ -1,5 +1,8 @@
 #include "viewer.h"
+
+#include <glog/logging.h>
 #include <pangolin/pangolin.h>
+
 #include "feature.h"
 #include "frame.h"
 #include "map.h"
@@ -155,5 +158,5 @@ void Viewer::DrawMapPoints() {
     }
     glEnd();
 }
-
-} 
+ 
+} // namespace demoam

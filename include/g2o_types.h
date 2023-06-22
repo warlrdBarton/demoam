@@ -1,6 +1,5 @@
-#pragma once
-
-#include "common_include.h"
+#ifndef DEMOAM__G2O_TYPES_H
+#define DEMOAM__G2O_TYPES_H
 
 #include <g2o/core/base_binary_edge.h>
 #include <g2o/core/base_unary_edge.h>
@@ -14,10 +13,13 @@
 #include <g2o/solvers/csparse/linear_solver_csparse.h>
 #include <g2o/solvers/dense/linear_solver_dense.h>
 
+#include "common_include.h"
+
 namespace demoam {
+
 class VertexPose : public g2o::BaseVertex<6, Sophus::SE3d> {
  public:
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW    
     virtual void setToOriginImpl() override { _estimate = Sophus::SE3d();}
     virtual void oplusImpl(const double *update) override {
         Eigen::Vector<double, 6> update_eigen;
@@ -31,7 +33,7 @@ class VertexPose : public g2o::BaseVertex<6, Sophus::SE3d> {
 
 class VertexXYZ : public g2o::BaseVertex<3, Eigen::Vector3d> {
  public:
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW    
     virtual void setToOriginImpl() override { _estimate = Eigen::Vector3d::Zero();}
     virtual void oplusImpl(const double *update) override {
         for (int i = 0; i < 3; ++i) {
@@ -44,7 +46,7 @@ class VertexXYZ : public g2o::BaseVertex<3, Eigen::Vector3d> {
 
 class EdgeProjectionPoseOnly : public g2o::BaseUnaryEdge<2, Eigen::Vector2d, VertexPose> {
  public:
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW    
     EdgeProjectionPoseOnly(const Eigen::Vector3d& pos, const Eigen::Matrix3d& K) 
         : _pw(pos), _K(K) {}
     
@@ -78,7 +80,7 @@ class EdgeProjectionPoseOnly : public g2o::BaseUnaryEdge<2, Eigen::Vector2d, Ver
 
 class EdgeProjection : public g2o::BaseBinaryEdge<2, Eigen::Vector2d, VertexPose, VertexXYZ> {
  public:
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW    
     EdgeProjection(const Eigen::Matrix3d& K, const Sophus::SE3d& camera_pose)
         : _K(K), _camera_pose(camera_pose) {}
     
@@ -114,4 +116,7 @@ class EdgeProjection : public g2o::BaseBinaryEdge<2, Eigen::Vector2d, VertexPose
     Sophus::SE3d _camera_pose;
     
 };
-}
+
+} // namespace demoam
+
+#endif // G2O_TYPES_H

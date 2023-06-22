@@ -1,4 +1,5 @@
-#pragma once 
+#ifndef DEMOAM__VIEWER_H
+#define DEMOAM__VIEWER_H
 
 #include <thread>
 #include <pangolin/pangolin.h>
@@ -12,7 +13,7 @@ class MapPoint;
 
 class Viewer {
  public:
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     Viewer();
 
@@ -34,7 +35,7 @@ class Viewer {
     void FollowCurrentFrame(pangolin::OpenGlRenderState& vis_camera);
 
     cv::Mat PlotFrameImage();
-
+    
     std::shared_ptr<Frame>current_frame_ = nullptr;
     std::shared_ptr<Map> map_ = nullptr;
 
@@ -48,4 +49,7 @@ class Viewer {
 
     std::mutex viewer_data_mutex_;
 };
-}  
+
+} // namespace demoam
+
+#endif // DEMOAM__VIEWER_H

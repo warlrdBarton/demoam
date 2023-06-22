@@ -1,14 +1,16 @@
-#pragma once
+#ifndef DEMOAM__DATASET_H
+#define DEMOAM__DATASET_H
 
 #include "common_include.h"
 
 namespace demoam {
+
 class Frame; 
 class Camera;
 
 class Dataset {
  public:
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW    
     Dataset(const std::string& dataset_path);
     bool Init();
     std::shared_ptr<Frame> NextFrame();
@@ -21,4 +23,7 @@ class Dataset {
     int current_image_index_ = 0;
     std::vector<std::shared_ptr<Camera>> cameras_;    
 };
-}
+
+} // namespace demoam
+
+#endif // DEMOAM__DATASET_H

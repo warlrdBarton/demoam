@@ -1,8 +1,10 @@
-#pragma once
+#ifndef DEMOAM__BACKEND_H   
+#define DEMOAM__BACKEND_H
 
 #include "common_include.h"
 
 namespace demoam {
+
 class Map;
 class Camera;
 class Frame;
@@ -34,4 +36,7 @@ class Backend {
     std::condition_variable map_update_;
     std::atomic_bool backend_running_;
 };
-}
+
+}  // namespace demoam
+
+#endif  // DEMOAM__BACKEND_H

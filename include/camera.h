@@ -1,11 +1,13 @@
-#pragma once
+#ifndef DEMOAM__CAMERA_H
+#define DEMOAM__CAMERA_H
 
 #include "common_include.h"
 
 namespace demoam {
+
 class Camera {
  public:
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW;    
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW   
     Camera(){}
     Camera(double fx, double fy, double cx, double cy, double baseline,
            const Sophus::SE3d& pose)
@@ -43,4 +45,7 @@ class Camera {
     Sophus::SE3d pose_; // pose from cam0
     Sophus::SE3d pose_inv_;
 };
-}
+
+} // namespace demoam
+
+#endif // DEMOAM__CAMERA_H

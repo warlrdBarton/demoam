@@ -1,4 +1,5 @@
-#pragma once
+#ifndef DEMOAM__ALGORITHM_H
+#define DEMOAM__ALGORITHM_H
 
 #include "common_include.h"
 
@@ -7,7 +8,6 @@ namespace demoam {
 inline bool TriangulatePoints(const std::vector<Sophus::SE3d>& poses,
                               const std::vector<Eigen::Vector3d>& pcs,
                               Eigen::Vector3d& pw) {
-
     Eigen::MatrixX4d A(2 * poses.size(), 4);
     for (size_t i = 0; i < poses.size(); ++i) {
         Eigen::Matrix<double, 3, 4> m = poses[i].matrix3x4();
@@ -24,4 +24,6 @@ inline bool TriangulatePoints(const std::vector<Sophus::SE3d>& poses,
     return false;
 }
 
-}
+} // namespace demoam
+
+#endif // DEMOAM__ALGORITHM_H

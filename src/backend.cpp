@@ -1,4 +1,7 @@
 #include "backend.h"
+
+#include <glog/logging.h>
+
 #include "algorithm.h"
 #include "feature.h"
 #include "g2o_types.h"
@@ -8,6 +11,7 @@
 #include "camera.h"
 
 namespace demoam {
+    
 Backend::Backend() {
     backend_running_.store(true);
     backend_thread_ = std::thread(&Backend::BackendLoop, this);
@@ -122,4 +126,4 @@ void Backend::Optimize(std::unordered_map<u_long, std::shared_ptr<Frame>>& keyfr
     
 }
 
-}
+} // namespace demoam

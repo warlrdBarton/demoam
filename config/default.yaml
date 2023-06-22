@@ -2,6 +2,7 @@
 # data
 # the tum dataset directory, change it to yours! 
 dataset_dir: /home/john/Datasets/data_odometry_gray/dataset/sequences/07
+inertial_dir: /home/john/Datasets/2011_09_30_drive_0027_sync/2011_09_30/2011_09_30_drive_0027_sync/oxts
 
 # camera intrinsics
 camera.fx: 517.3
@@ -12,3 +13,11 @@ camera.cy: 249.7
 num_features: 150
 num_features_init: 50
 num_features_tracking: 50
+
+# IMU
+IMU.NoiseGyro: 1.6968e-04
+IMU.NoiseAcc: 2.0000e-3
+IMU.GyroWalk: 0.003491
+IMU.AccWalk: 5.0000e-3
+IMU.Tci: 7.812974061203591e-03    -9.998594093786392e-01     1.483430024423826e-02    -3.323895590633578e-01 -4.279199663676776e-03    -1.486804454193362e-02    -9.998803895842286e-01     7.267046018167079e-01 9.999603154769388e-01     7.748560677920580e-03    -4.394761463307720e-03    -1.138237196069211e+00
+

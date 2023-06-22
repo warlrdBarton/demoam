@@ -1,8 +1,10 @@
-#pragma once
+#ifndef DEMOAM__FRONTEND_H
+#define DEMOAM__FRONTEND_H
 
 #include "common_include.h"
 
 namespace demoam {
+
 class Frame;
 class Camera;
 class Map;
@@ -18,10 +20,8 @@ enum FrontendStatus {
 
 class Frontend {
  public:
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW 
     Frontend();
-    
-
     bool AddFrame(std::shared_ptr<Frame> frame);
     void Stop();
     
@@ -39,6 +39,9 @@ class Frontend {
     bool BuildInitMap();
     bool Track();
     bool Reset();
+    int DetectFastInLeft();
+    int SearchLastFrameOpticalFlow();
+    int SearchInRightOpticalFlow();
     int EstimateCurrentPose();
     bool InsertKeyFrame();
     void SetObservationsForKeyFrame();
@@ -69,5 +72,10 @@ class Frontend {
     int num_features_tracking_ = 50;
     int num_features_tracking_bad_ = 20;
     int num_features_needed_for_keyframe_ = 80;
+
+    std::shared_ptr<cv::FastFeatureDetector> fast_detector_;
 };
-}
+
+} // namespace demoam
+
+#endif // DEMOAM__FRONTEND_H

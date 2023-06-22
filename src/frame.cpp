@@ -1,6 +1,7 @@
 #include "frame.h"
 
 namespace demoam {
+    
 std::shared_ptr<Frame> Frame::CreateFrame() {
     static long factory_id = 0;
     std::shared_ptr<Frame> new_frame(new Frame);
@@ -13,4 +14,5 @@ void Frame::SetKeyFrame() {
     is_keyframe_ = true;
     keyframe_id_ = keyframe_factory_id++;
 }
-}
+
+} // namespace demoam

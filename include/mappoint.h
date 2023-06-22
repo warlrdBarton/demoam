@@ -1,13 +1,15 @@
-#pragma once
+#ifndef DEMOAM__MAPPOINT_H
+#define DEMOAM__MAPPOINT_H
 
 #include "common_include.h"
 
 namespace demoam {
+
 struct Frame;
 struct Feature;
 
 struct MapPoint {
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW  
     static std::shared_ptr<MapPoint> CreateNewMapPoint();
     MapPoint() {}
     MapPoint(long id, Eigen::Vector3d position);
@@ -39,4 +41,7 @@ struct MapPoint {
     int observed_times_ = 0;
     std::list<std::weak_ptr<Feature>> observations_;
 };
-}
+
+} // namespace demoam
+
+#endif // DEMOAM__MAPPOINT_H

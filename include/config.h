@@ -1,8 +1,10 @@
-#pragma once
+#ifndef DEMOAM__CONFIG_H
+#define DEMOAM__CONFIG_H
 
 #include "common_include.h"
 
 namespace demoam {
+
 class Config {
  private:
     static std::shared_ptr<Config> config_;
@@ -16,4 +18,7 @@ class Config {
         return T(Config::config_ -> file_[key]);
     }
 };
-}
+
+} // namespace demoam
+
+#endif // DEMOAM__CONFIG_H

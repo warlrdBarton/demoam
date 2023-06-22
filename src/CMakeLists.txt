@@ -4,7 +4,6 @@ add_library(demoam SHARED
             config.cpp
             dataset.cpp
             feature.cpp
-            feature_tracker.cpp
             frame.cpp
             frontend.cpp
             map.cpp

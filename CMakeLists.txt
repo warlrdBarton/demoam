@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.4.0)
 project(demoam)
 
 set(CMAKE_BUILD_TYPE "Release")
-set(CMAKE_CXX_FLAGS "-std=c++17 -g -Wall")
+set(CMAKE_CXX_FLAGS_DEBUG "-std=c++17 -g -Wall")
 set(CMAKE_CXX_FLAGS_RELEASE  "-std=c++17 -O3 -fopenmp -pthread")
 # -O3 level will unexpectedly optimize out some specific temp var, which leads to memory double free;
 
@@ -46,6 +46,10 @@ include_directories(${GTEST_INCLUDE_DIRS})
 find_package(CSparse REQUIRED)
 include_directories(${CSPARSE_INCLUDE_DIR})
 
+# format
+find_package(fmt REQUIRED)
+include_directories(${fmt_INCLUDE_DIRS})
+
 set(THIRD_PARTY_LIBS
     ${OpenCV_LIBS}
     ${GLOG_LIBRARIES}
@@ -55,7 +59,7 @@ set(THIRD_PARTY_LIBS
     ${Sophus_LIBRARIES}
     g2o_core g2o_stuff g2o_types_sba g2o_solver_csparse g2o_csparse_extension
     ${CSPARSE_LIBRARY}
-    fmt pthread
+    fmt::fmt pthread
     )
 
 enable_testing()

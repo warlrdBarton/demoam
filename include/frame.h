@@ -1,13 +1,15 @@
-#pragma once
+#ifndef DEMOAM__FRAME_H
+#define DEMOAM__FRAME_H
 
 #include "common_include.h"
 
 namespace demoam {
+    
 struct Feature;
 struct MapPoint;
 
 struct Frame {
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW  
     static std::shared_ptr<Frame> CreateFrame();
     Frame(){}
     void SetKeyFrame();
@@ -32,4 +34,7 @@ struct Frame {
     std::vector<std::shared_ptr<Feature>> features_right_;
 
 };
-} 
+
+}  // namespace demoam
+
+#endif  // DEMOAM__FRAME_H

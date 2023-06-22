@@ -1,6 +1,9 @@
 #include "config.h"
 
+#include <glog/logging.h>
+
 namespace demoam {
+    
 bool Config::SetParameterFile(const std::string& filename) {
     if (config_ == nullptr) {
         config_ = std::shared_ptr<Config>(new Config());
@@ -23,4 +26,4 @@ Config::~Config() {
 //static member initialized out of the class
 std::shared_ptr<Config> Config::config_ = nullptr; 
 
-}
+} // namespace demoam
