@@ -1,3 +1,12 @@
+# v1.0.1.1 minor change in format
+       max      6.026038
+      mean      3.357331
+    median      3.874574
+       min      0.000000
+      rmse      3.694595
+       sse      15028.681974
+       std      1.542193
+
 # v1.0.1 change GFTT to FAST
 
 # v1.0.0 Basic 2-thread VSLAM Framework 
