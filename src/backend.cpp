@@ -2,7 +2,7 @@
 
 #include <glog/logging.h>
 
-#include "algorithm.h"
+#include "geometric_tools.h"
 #include "feature.h"
 #include "g2o_types.h"
 #include "map.h"

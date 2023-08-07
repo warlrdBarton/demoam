@@ -6,6 +6,7 @@ add_library(demoam SHARED
             feature.cpp
             frame.cpp
             frontend.cpp
+            imu_types.cpp
             map.cpp
             mappoint.cpp
             viewer.cpp

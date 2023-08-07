@@ -22,7 +22,7 @@ bool VisualOdometry::Init() {
     if (Config::SetParameterFile(config_file_path_) == false) {
         return false;
     }
-    dataset_ = std::shared_ptr<Dataset> (new Dataset(Config::Get<std::string>("dataset_dir")));
+    dataset_ = std::shared_ptr<Dataset> (new Dataset(Config::Get<std::string>("dataset_dir"), Config::Get<std::string>("inertial_dir")));
     CHECK_EQ(dataset_ -> Init(), true);
 
     frontend_ = std::shared_ptr<Frontend> (new Frontend);
@@ -44,15 +44,9 @@ bool VisualOdometry::Init() {
 
 void VisualOdometry::Run() {
     LOG(INFO) << "VisualOdometry::Run(): Visual Odometry starts...";
-    #ifdef TEST
-    int iter = 0;
-    #endif
     while (true) {
         if (!VisualOdometry::Step()) break;
         LOG(INFO) << "\n\n\n";
-        #ifdef TEST
-        if (iter++ > 400) break;
-        #endif
     }
     frontend_ -> Stop();
     backend_ -> Stop();
@@ -68,6 +62,12 @@ bool VisualOdometry::Step() {
     auto t2 = std::chrono::steady_clock::now();
     auto time_used = std::chrono::duration_cast<std::chrono::duration<double>>(t2 - t1);
     LOG(INFO) << "VisualOdometry::Step(): VO cost time: " << time_used.count() << " seconds.";
+
+    if (!success) {
+        //TODO: TEST
+        cv::waitKey(0);
+    }
+
     return success;
 }
 

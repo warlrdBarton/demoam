@@ -2,7 +2,7 @@
 
 #include <glog/logging.h>
 
-#include "algorithm.h"
+#include "geometric_tools.h"
 #include "backend.h"
 #include "frame.h"
 #include "map.h"
@@ -17,9 +17,12 @@
 
 namespace demoam {
 Frontend::Frontend() {
-    fast_detector_ = cv::FastFeatureDetector::create(10, true);
+    fast_detector_ = cv::FastFeatureDetector::create(Config::Get<int>("threshold_fast_detector"), true);
+
     num_features_init_ = Config::Get<int>("num_features_init");
-    num_features_ = Config::Get<int>("num_features");
+    num_features_tracking_good_ = Config::Get<int>("num_features_tracking_good");
+    num_features_needed_for_keyframe_ = Config::Get<int>("num_features_needed_for_keyframe");
+
     save_to_file_.open("./traj.txt", std::ios::trunc);
 }
 
@@ -29,12 +32,26 @@ void Frontend::Stop() {
 
 bool Frontend::AddFrame(std::shared_ptr<Frame> frame) {
     current_frame_ = frame;
+
+    LOG(INFO) << "--------------------------------------------------------------------------------";
+    LOG(INFO) << "------------------------------Status:"<< status_ << "----------------------------------------------";
+    LOG(INFO) << "--------------------------------------------------------------------------------";
+    LOG(INFO) << "------------------------------Frame:" << current_frame_->id_ << "----------------------------------------";
+    LOG(INFO) << "--------------------------------------------------------------------------------";
+
+    imu_meas_since_last_KF_.insert(imu_meas_since_last_KF_.end(), 
+                                   current_frame_->imu_meas_since_last_frame_.begin(), 
+                                   current_frame_->imu_meas_since_last_frame_.end());
+
+    if (last_keyframe_) 
+        current_frame_->reference_KF_ = last_keyframe_;
+
     switch (status_) {
         case FrontendStatus::INITING:
             StereoInit();
             break;
-        case FrontendStatus::TRACKING_GOOD:
-        case FrontendStatus::TRACKING_BAD:
+        case FrontendStatus::OK:
+        case FrontendStatus::RECENTLY_LOST:
             Track();
             break;
         case FrontendStatus::LOST:
@@ -42,22 +59,29 @@ bool Frontend::AddFrame(std::shared_ptr<Frame> frame) {
             break;
     }
     SaveTrajectoryKITTI();
-    last_frame_ = current_frame_;
-    return true;
+
+    if (status_ != FrontendStatus::RECENTLY_LOST && status_ != FrontendStatus::LOST) {
+        last_frame_ = current_frame_;
+    }
+
+    return status_ != FrontendStatus::LOST;
+    //return true;
 }
 
 bool Frontend::StereoInit() {
     DetectFastInLeft();
     if (SearchInRightOpticalFlow() < num_features_init_) {
+        LOG(INFO) << "Frontend::StereoInit(): Stereo init failed.";
         return false;
     } 
     bool build_map_success = BuildInitMap();
     if (build_map_success) {
-        status_ = FrontendStatus::TRACKING_GOOD;
         if (viewer_) {
             viewer_ -> AddCurrentFrame(current_frame_);
             viewer_ -> UpdateMap();
         }
+        status_ = FrontendStatus::OK;
+        last_keyframe_ = current_frame_;
         return true;
     }
     return false;       
@@ -65,10 +89,10 @@ bool Frontend::StereoInit() {
 
 bool Frontend::BuildInitMap() {
     int cnt_init_mappoints = 0;
-    std::vector<Sophus::SE3d> poses{camera_left_ -> Pose(), camera_right_ -> Pose()}; 
+    VecSE3d poses{camera_left_ -> Pose(), camera_right_ -> Pose()}; 
     for (size_t i = 0; i < current_frame_ -> features_left_.size(); ++i) {
         if (current_frame_ -> features_right_[i] == nullptr) continue;
-        std::vector<Eigen::Vector3d> points{
+        VecVector3d points{
             camera_left_ -> pixel2camera(
                 Eigen::Vector2d(current_frame_->features_left_[i] -> position_.pt.x,
                                 current_frame_->features_left_[i] -> position_.pt.y)),
@@ -97,22 +121,25 @@ bool Frontend::BuildInitMap() {
 }
 
 bool Frontend::Track() {
-    if (last_frame_) {
-        current_frame_ -> SetPose(relative_motion_ * last_frame_ -> Pose());
+    PredictCurrentPose();
+
+    if (status_ != FrontendStatus::RECENTLY_LOST) {
+        SearchLastFrameOpticalFlow();
+        tracking_inliers_ = EstimateCurrentPose();
     }
-    SearchLastFrameOpticalFlow();
-    tracking_inliners_ = EstimateCurrentPose();
     
-    if (tracking_inliners_ > num_features_tracking_) {
-        status_  = FrontendStatus::TRACKING_GOOD;
-    } else if (tracking_inliners_ > num_features_tracking_bad_) {
-        status_ = FrontendStatus::TRACKING_BAD;
+    tracking_inliers_ = TrackLocalMap();
+    
+    if (tracking_inliers_ > num_features_tracking_good_) {
+        status_  = FrontendStatus::OK;
+    } else if (map_->isImuInitialized() && current_frame_->time_stamp_ - last_frame_->time_stamp_ < 5.0) { // IMU-Only Mode lasts 5 secs at most
+        status_ = FrontendStatus::RECENTLY_LOST;
     } else {
         status_ = FrontendStatus::LOST;
     }
     
     InsertKeyFrame();
-    relative_motion_ = current_frame_ -> Pose() * last_frame_ -> Pose().inverse();
+    if (status_ == FrontendStatus::OK) relative_motion_ = current_frame_ -> Pose() * last_frame_ -> Pose().inverse();
     
     if (viewer_) viewer_ -> AddCurrentFrame(current_frame_);
     return true; 
@@ -283,7 +310,20 @@ int Frontend::EstimateCurrentPose() {
 }
 
 bool Frontend::InsertKeyFrame() {
-    if (tracking_inliners_ >= num_features_needed_for_keyframe_) {
+/**
+ * //TODO: detailing the conditions for KF insertion
+ * @brief 判断当前帧是否需要插入关键帧
+ * 
+ * Step 1：纯VO模式下不插入关键帧，如果局部地图被闭环检测使用，则不插入关键帧
+ * Step 2：如果距离上一次重定位比较近，或者关键帧数目超出最大限制，不插入关键帧
+ * Step 3：得到参考关键帧跟踪到的地图点数量
+ * Step 4：查询局部地图管理器是否繁忙,也就是当前能否接受新的关键帧
+ * Step 5：对于双目或RGBD摄像头，统计可以添加的有效地图点总数 和 跟踪到的地图点数量
+ * Step 6：决策是否需要插入关键帧
+ * @return true         需要
+ * @return false        不需要
+ */
+    if (tracking_inliers_ >= num_features_needed_for_keyframe_) {
         return false;
     }
     
@@ -314,13 +354,13 @@ void Frontend::SetObservationsForKeyFrame() {
 int Frontend::TriangulateNewPoints() {
     int cnt_triangulated_pts = 0;
     Sophus::SE3d current_pose_Twc = current_frame_ -> Pose().inverse();
-    std::vector<Sophus::SE3d> poses{camera_left_ -> Pose(), camera_right_ -> Pose()}; 
+    VecSE3d poses{camera_left_ -> Pose(), camera_right_ -> Pose()}; 
     for (size_t i = 0; i < current_frame_ -> features_left_.size(); ++i) {
         if (current_frame_ -> features_left_[i] -> mappoint_.expired() == false
             || current_frame_ -> features_right_[i] == nullptr) {
                 continue;
         }
-        std::vector<Eigen::Vector3d> points{
+        VecVector3d points{
             camera_left_ -> pixel2camera(
                 Eigen::Vector2d(current_frame_->features_left_[i] -> position_.pt.x,
                                 current_frame_->features_left_[i] -> position_.pt.y)),
@@ -360,4 +400,71 @@ void Frontend::SaveTrajectoryKITTI() {
     save_to_file_ << "\n";
 }
 
+int Frontend::TrackLocalMap() {
+    // TODO: complete TrackLocalMap
+    return tracking_inliers_;
+    /*
+    std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
+    auto localmap = map_->GetActiveMapPoints();
+    std::chrono::steady_clock::time_point t4 = std::chrono::steady_clock::now();
+    double timeCost = std::chrono::duration_cast<std::chrono::duration<double> >(t4 - t1).count();
+    LOG(INFO) << "Frontend::TrackLocalMap(): get local map points cost time: " << timeCost << endl;
+
+    for (auto mp : localmap)
+        if (mp)
+            mp->mbTrackInView = false;
+    for (auto feat: mpCurrentFrame->mFeaturesLeft)
+        if (feat && feat->mpPoint && feat->mbOutlier == false)
+            feat->mpPoint->mbTrackInView = true;
+    // 筛一下视野内的点
+    set<shared_ptr<MapPoint> > mpsInView;
+    for (auto &mp: localmap) {
+        if (mp && mp->isBad() == false && mp->mbTrackInView == false && mpCurrentFrame->isInFrustum(mp, 0.5)) {
+            mpsInView.insert(mp);
+        }
+    }
+    if (mpsInView.empty())
+        return tracking_inliers_ >= setting::minTrackLocalMapInliers;
+    LOG(INFO) << "Call Search by direct projection" << endl;
+    int cntMatches = mpMatcher->SearchByDirectProjection(mpCurrentFrame, mpsInView);
+    LOG(INFO) << "Track local map matches: " << cntMatches << ", current features: "
+              << mpCurrentFrame->mFeaturesLeft.size() << endl;
+    std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
+    timeCost = std::chrono::duration_cast<std::chrono::duration<double> >(t2 - t1).count();
+    LOG(INFO) << "Search local map points cost time: " << timeCost << endl;
+    // Optimize Pose
+    int optinliers = OptimizeCurrentPose();
+    // Update MapPoints Statistics
+    tracking_inliers_ = 0;
+    for (shared_ptr<Feature> feat : mpCurrentFrame->mFeaturesLeft) {
+        if (feat->mpPoint) {
+            if (!feat->mbOutlier) {
+                feat->mpPoint->IncreaseFound();
+                if (feat->mpPoint->Status() == MapPoint::GOOD)
+                    tracking_inliers_++;
+            } else {
+            }
+        }
+    }
+    std::chrono::steady_clock::time_point t3 = std::chrono::steady_clock::now();
+    timeCost = std::chrono::duration_cast<std::chrono::duration<double> >(t3 - t1).count();
+    LOG(INFO) << "Track local map cost time: " << timeCost << endl;
+    LOG(INFO) << "Track Local map tracking_inliers_: " << tracking_inliers_ << endl;
+    // Decide if the tracking was succesful
+    if (tracking_inliers_ < setting::minTrackLocalMapInliers)
+        return false;
+    else
+        return true;
+    */
+
+}
+
+void Frontend::PredictCurrentPose() {
+    //TODO: complete PredictCurrentPose
+    if (map_->isImuInitialized() == false && last_frame_ != nullptr) {
+        current_frame_ -> SetPose(relative_motion_ * last_frame_ -> Pose());
+        return;
+    }
+
+}
 } // namespace demoam

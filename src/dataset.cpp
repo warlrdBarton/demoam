@@ -5,13 +5,43 @@
 
 #include "camera.h"
 #include "frame.h"
+#include "imu_types.h"
 
 namespace demoam {
     
-Dataset::Dataset(const std::string& dataset_path) : dataset_path_(dataset_path) {}
+Dataset::Dataset(const std::string& dataset_path, const std::string& imu_path) 
+    : dataset_path_(dataset_path), 
+      imu_path_(imu_path) {}
 
 bool Dataset::Init() {
-    std::ifstream fin(dataset_path_ + "/calib.txt"); // read in intrinsics
+    LOG(INFO) << "Dataset::Init(): Loading calibrations" <<"...";
+    LoadCalib();
+    LOG(INFO) << "Dataset::Init(): LOADED";
+
+    LOG(INFO) << "Dataset::Init(): Loading images for sequence " <<"...";
+    LoadImages();
+    LOG(INFO) << "Dataset::Init(): LOADED";
+
+    LOG(INFO) << "Dataset::Init(): Loading IMU for sequence " <<"...";
+    LoadIMU();
+    LOG(INFO) << "Dataset::Init(): LOADED";
+
+    if (vTimestampsCam_.empty() || vTimestampsImu_.empty() || vAcc_.empty() || vGyro_.empty()) {
+        LOG(ERROR) << "Dataset::Init(): Failed to load images or IMU for sequence";
+        return false;
+    }
+
+    // Find first imu to be considered, supposing imu measurements start first
+    while(vTimestampsImu_[first_imu_] <= vTimestampsCam_[0]) {
+        first_imu_++;
+    }
+    first_imu_--; // first imu measurement to be considered
+
+    return true;
+}
+
+bool Dataset::LoadCalib() {
+    std::ifstream fin(dataset_path_ + "/calib.txt");
     if (!fin) {
         LOG(ERROR) << "Could not Find " << dataset_path_ << "/calib.txt!";
         return false;
@@ -46,6 +76,83 @@ bool Dataset::Init() {
     return true;
 }
 
+bool Dataset::LoadImages() {
+    std::ifstream fin(dataset_path_ + "/times.txt");
+    if (!fin) {
+        LOG(ERROR) << "Could not Find " << dataset_path_ << "/times.txt!";
+        return false;
+    }
+    while (!fin.eof()) {
+        std::string str;
+        getline(fin, str);
+        if (!str.empty()) {
+            std::stringstream ss(str);
+            double timestamp;
+            ss >> timestamp;
+            vTimestampsCam_.push_back(timestamp);
+        }
+    }
+    fin.close();
+    return true;
+}
+
+bool Dataset::LoadIMU() {
+    std::ifstream fTimes(imu_path_ + "/times.txt");
+    if (!fTimes) {
+        LOG(ERROR) << "Could not Find " << imu_path_ << "/times.txt!";
+        return false;
+    }
+    vTimestampsImu_.reserve(100000);
+    while (!fTimes.eof()) {
+        std::string s;
+        getline(fTimes, s);
+        if(!s.empty())
+        {
+            std::stringstream ss(s);
+            double timestamp;
+            ss >> timestamp;
+            vTimestampsImu_.push_back(timestamp);
+        }        
+    }
+    fTimes.close();
+    LOG(INFO) << "Dataset::LoadIMU(): Loaded IMU timestamps";
+
+    const int nTimes = vTimestampsImu_.size();
+
+    for (int i = 0; i < nTimes; ++i) {
+        std::stringstream ss;
+        ss << std::setfill('0') << std::setw(10) << i;
+        std::string pathtemp = imu_path_ + "/data/" + ss.str() + ".txt";
+        std::ifstream fin (pathtemp);
+        if (!fin)
+        {
+            LOG(ERROR) << "Could not Find IMU data at path " << pathtemp;
+            return false;
+        }
+
+        std::string s;
+        getline(fin, s);
+        if(!s.empty())
+        {
+            std::string item;
+            size_t pos = 0;
+            double data[23];
+            int count = 0;
+            while ((pos = s.find(' ')) != std::string::npos) {
+                item = s.substr(0, pos);
+                data[count++] = stod(item);
+                s.erase(0, pos + 1);
+            }
+            item = s.substr(0, pos);
+            data[6] = stod(item);
+
+            vAcc_.push_back(cv::Point3f(data[11],data[12],data[13]));
+            vGyro_.push_back(cv::Point3f(data[17],data[18],data[19]));
+        }
+    }
+    return true;
+}
+
 std::shared_ptr<Frame> Dataset::NextFrame() {
     boost::format fmt("%s/image_%d/%06d.png");
     cv::Mat image_left, image_right;
@@ -65,9 +172,22 @@ std::shared_ptr<Frame> Dataset::NextFrame() {
     cv::resize(image_right, image_right_resized, cv::Size(), 0.5, 0.5,
                cv::INTER_NEAREST);
 
+    // Load imu measurements from previous frame
+    std::vector<IMU::Point, Eigen::aligned_allocator<IMU::Point>> imu_meas_since_last_frame;
+    if (current_image_index_ > 0) {
+        while (vTimestampsImu_[first_imu_] <= vTimestampsCam_[current_image_index_]) {
+            imu_meas_since_last_frame.push_back(IMU::Point(vAcc_[first_imu_].x, vAcc_[first_imu_].y, vAcc_[first_imu_].z,
+                                        vGyro_[first_imu_].x, vGyro_[first_imu_].y, vGyro_[first_imu_].z,
+                                        vTimestampsImu_[first_imu_]));
+            first_imu_++;
+        }
+    }
+
     std::shared_ptr<Frame> new_frame = Frame::CreateFrame();
     new_frame -> img_left_ = image_left_resized;
     new_frame -> img_right_ = image_right_resized;
+    new_frame -> time_stamp_ = vTimestampsCam_[current_image_index_];
+    new_frame -> imu_meas_since_last_frame_ = imu_meas_since_last_frame; 
     current_image_index_++;
     return new_frame;
 }

@@ -10,8 +10,7 @@ class MapPoint;
 class Map {
  public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW 
-    Map(){
-    }
+    Map(){}
     void InsertKeyFrame(std::shared_ptr<Frame> frame);
     void InsertMapPoint(std::shared_ptr<MapPoint> mappoint);
 
@@ -33,6 +32,11 @@ class Map {
     }
 
     void CleanMap();
+
+    bool isImuInitialized() {
+        return is_imu_initialized_;
+    }
+    bool is_imu_initialized_ = false;
     
  private:
     void RemoveOldKeyFrame();
@@ -43,6 +47,8 @@ class Map {
     
     std::shared_ptr<Frame> current_frame_ = nullptr;
     size_t num_active_keyframes_ = 7;
+
+
  
 };
 

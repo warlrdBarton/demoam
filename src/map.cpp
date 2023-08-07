@@ -22,8 +22,7 @@ void Map::InsertMapPoint(std::shared_ptr<MapPoint> mappoint) {
 }
 
 void Map::RemoveOldKeyFrame() {
-    // TODO:
-    // easily remove the oldest in time;
+    // TODO: Maginalization instead of simply remove?
     if (current_frame_ == nullptr) return;
     double max_dis = 0, min_dis = 9999;
     double max_kf_id = 0, min_kf_id = 0;

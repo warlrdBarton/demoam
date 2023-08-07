@@ -2,6 +2,7 @@
 #define DEMOAM__FRONTEND_H
 
 #include "common_include.h"
+#include "imu_types.h"
 
 namespace demoam {
 
@@ -13,8 +14,8 @@ class Viewer;
 
 enum FrontendStatus { 
     INITING, 
-    TRACKING_GOOD, 
-    TRACKING_BAD, 
+    OK, 
+    RECENTLY_LOST, 
     LOST 
 };
 
@@ -47,6 +48,8 @@ class Frontend {
     void SetObservationsForKeyFrame();
     int TriangulateNewPoints();
     void SaveTrajectoryKITTI();
+    int TrackLocalMap();
+    void PredictCurrentPose();
 
 
     std::ofstream save_to_file_;
@@ -56,6 +59,7 @@ class Frontend {
     
     std::shared_ptr<Frame> current_frame_ = nullptr;
     std::shared_ptr<Frame> last_frame_ = nullptr;
+    std::shared_ptr<Frame> last_keyframe_ = nullptr;
     std::shared_ptr<Camera> camera_left_ = nullptr;
     std::shared_ptr<Camera> camera_right_ = nullptr;
 
@@ -64,13 +68,12 @@ class Frontend {
     std::shared_ptr<Viewer> viewer_ = nullptr;
 
     Sophus::SE3d relative_motion_;
+    std::vector<IMU::Point, Eigen::aligned_allocator<IMU::Point>> imu_meas_since_last_KF_;
 
-    int tracking_inliners_ = 0;
+    int tracking_inliers_ = 0;
 
-    int num_features_ = 200;
     int num_features_init_ = 100;
-    int num_features_tracking_ = 50;
-    int num_features_tracking_bad_ = 20;
+    int num_features_tracking_good_ = 50;
     int num_features_needed_for_keyframe_ = 80;
 
     std::shared_ptr<cv::FastFeatureDetector> fast_detector_;

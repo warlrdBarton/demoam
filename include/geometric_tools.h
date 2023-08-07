@@ -5,8 +5,8 @@
 
 namespace demoam {
 
-inline bool TriangulatePoints(const std::vector<Sophus::SE3d>& poses,
-                              const std::vector<Eigen::Vector3d>& pcs,
+inline bool TriangulatePoints(const VecSE3d& poses,
+                              const VecVector3d& pcs,
                               Eigen::Vector3d& pw) {
     Eigen::MatrixX4d A(2 * poses.size(), 4);
     for (size_t i = 0; i < poses.size(); ++i) {
