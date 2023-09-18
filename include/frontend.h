@@ -50,6 +50,9 @@ class Frontend {
     void SaveTrajectoryKITTI();
     int TrackLocalMap();
     void PredictCurrentPose();
+    void PreintegrateIMU();
+    void IMUInitialization();
+    Vector3d IMUInitEstBg(const std::map<u_long, std::shared_ptr<Frame>>& vpKFs);
 
 
     std::ofstream save_to_file_;
@@ -68,8 +71,10 @@ class Frontend {
     std::shared_ptr<Viewer> viewer_ = nullptr;
 
     Sophus::SE3d relative_motion_;
-    std::vector<IMU::Point, Eigen::aligned_allocator<IMU::Point>> imu_meas_since_last_KF_;
-
+    std::vector<IMU, Eigen::aligned_allocator<IMU>> imu_meas_since_RefKF_; 
+                                                                                           
+    std::shared_ptr<IMUPreintegration> imu_preintegrator_from_lastframe_, imu_preintegrator_from_RefKF_; 
+ 
     int tracking_inliers_ = 0;
 
     int num_features_init_ = 100;

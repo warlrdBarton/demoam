@@ -18,7 +18,8 @@ struct Frame {
 
     void SetKeyFrame();
 
-    
+    void ReComputeIMUPreIntegration();
+
     // --------------------------------------------------------------------
     // Getters 
     inline Sophus::SE3d Pose() {
@@ -68,7 +69,7 @@ struct Frame {
         velocity_n_bias_.segment<3>(6) = bias_a;
     }
 
-    const IMU::IMUPreIntegration &IMUPreIntegration() { return imu_pre_integration_; }
+    const auto& IMUPreintegrator() { return imu_preintegrator_from_RefKF_; }
  
     // --------------------------------------------------------------------
     // Data
@@ -85,8 +86,12 @@ struct Frame {
     
     Sophus::SE3d pose_;
     Eigen::Matrix<double, 9, 1> velocity_n_bias_ = Eigen::Matrix<double, 9, 1>::Zero();
-    std::vector<IMU::Point, Eigen::aligned_allocator<IMU::Point>> imu_meas_since_last_frame_;
-    IMU::IMUPreIntegration imu_pre_integration_;
+
+    std::vector<IMU, Eigen::aligned_allocator<IMU>> imu_meas_;  // For KF, it stores measurements from reference KeyFrame
+                                                                            // For the rest frames, keeps measurements up to the last frame
+
+    std::shared_ptr<IMUPreintegration> imu_preintegrator_from_RefKF_; // this one trace back to last KF,
+                                                 // inter-frame IMU integration use a temporary one stored in Frontend Class
 
 
     cv::Mat img_left_, img_right_;

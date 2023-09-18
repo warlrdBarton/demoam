@@ -22,11 +22,11 @@ class Map {
         std::unique_lock<std::mutex> lck(data_mutex_);
         return active_mappoints_;
     }
-    std::unordered_map<u_long, std::shared_ptr<Frame>> GetAllKeyFrames() {
+    std::map<u_long, std::shared_ptr<Frame>> GetAllKeyFrames() {
         std::unique_lock<std::mutex> lck(data_mutex_);
         return keyframes_;
     }
-    std::unordered_map<u_long, std::shared_ptr<Frame>> GetActiveKeyFrames() {
+    std::map<u_long, std::shared_ptr<Frame>> GetActiveKeyFrames() {
         std::unique_lock<std::mutex> lck(data_mutex_);
         return active_keyframes_;
     }
@@ -43,7 +43,7 @@ class Map {
     
     std::mutex data_mutex_;
     std::unordered_map<u_long, std::shared_ptr<MapPoint>> mappoints_, active_mappoints_;
-    std::unordered_map<u_long, std::shared_ptr<Frame>> keyframes_, active_keyframes_;
+    std::map<u_long, std::shared_ptr<Frame>> keyframes_, active_keyframes_;
     
     std::shared_ptr<Frame> current_frame_ = nullptr;
     size_t num_active_keyframes_ = 7;

@@ -18,10 +18,16 @@ inline bool TriangulatePoints(const VecSE3d& poses,
     auto svd = A.jacobiSvd(Eigen::ComputeFullV);
     pw = (svd.matrixV().col(3) / svd.matrixV()(3, 3)).head<3>();  
 
-    if (svd.singularValues()[3] / svd.singularValues()[2] < 1e-2) {
-        return true;
+    if (svd.singularValues()[3] / svd.singularValues()[2] < 1e-2 && pw[2] > 0) {
+        return true; 
     }
-    return false;
+    return false; 
+}
+
+inline Eigen::Matrix3d NormalizeRotation(const Eigen::Matrix3d &R)
+{
+    Eigen::JacobiSVD<Eigen::Matrix3d> svd(R, Eigen::ComputeFullU | Eigen::ComputeFullV);
+    return svd.matrixU() * svd.matrixV().transpose();
 }
 
 } // namespace demoam

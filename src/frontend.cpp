@@ -18,6 +18,9 @@
 namespace demoam {
 Frontend::Frontend() {
     fast_detector_ = cv::FastFeatureDetector::create(Config::Get<int>("threshold_fast_detector"), true);
+    
+    imu_preintegrator_from_RefKF_ = std::make_shared<IMUPreintegration>();
+    imu_preintegrator_from_lastframe_ = std::make_shared<IMUPreintegration>();
 
     num_features_init_ = Config::Get<int>("num_features_init");
     num_features_tracking_good_ = Config::Get<int>("num_features_tracking_good");
@@ -31,18 +34,16 @@ void Frontend::Stop() {
 }
 
 bool Frontend::AddFrame(std::shared_ptr<Frame> frame) {
-    current_frame_ = frame;
-
     LOG(INFO) << "--------------------------------------------------------------------------------";
     LOG(INFO) << "------------------------------Status:"<< status_ << "----------------------------------------------";
     LOG(INFO) << "--------------------------------------------------------------------------------";
-    LOG(INFO) << "------------------------------Frame:" << current_frame_->id_ << "----------------------------------------";
+    LOG(INFO) << "------------------------------Frame:" << frame->id_ << "----------------------------------------";
     LOG(INFO) << "--------------------------------------------------------------------------------";
 
-    imu_meas_since_last_KF_.insert(imu_meas_since_last_KF_.end(), 
-                                   current_frame_->imu_meas_since_last_frame_.begin(), 
-                                   current_frame_->imu_meas_since_last_frame_.end());
+    current_frame_ = frame;
 
+    PreintegrateIMU();
+    
     if (last_keyframe_) 
         current_frame_->reference_KF_ = last_keyframe_;
 
@@ -101,7 +102,7 @@ bool Frontend::BuildInitMap() {
                                 current_frame_->features_right_[i] -> position_.pt.y))
         };
         Eigen::Vector3d pw = Eigen::Vector3d::Zero();
-        if (TriangulatePoints(poses, points, pw) && pw[2] > 0) {
+        if (TriangulatePoints(poses, points, pw)) { // https://www.cvlibs.net/datasets/kitti/setup.php //TODO:ProblemSolved
             auto new_mappoint = MapPoint::CreateNewMapPoint();
             new_mappoint -> SetPos(pw);
             new_mappoint -> AddObservation(current_frame_ -> features_left_[i]);
@@ -139,6 +140,10 @@ bool Frontend::Track() {
     }
     
     InsertKeyFrame();
+
+    if (map_->isImuInitialized() == false) 
+        IMUInitialization();
+
     if (status_ == FrontendStatus::OK) relative_motion_ = current_frame_ -> Pose() * last_frame_ -> Pose().inverse();
     
     if (viewer_) viewer_ -> AddCurrentFrame(current_frame_);
@@ -163,6 +168,7 @@ int Frontend::DetectFastInLeft() {
         );
         cntDetected++;
     }
+    LOG(INFO) << "Frontend::DetectFastInLeft(): Keypoints detected in Left: " << cntDetected;
     return cntDetected;
 }
 
@@ -241,21 +247,22 @@ int Frontend::EstimateCurrentPose() {
     g2o::SparseOptimizer optimizer;
     optimizer.setAlgorithm(solver);
 
-    VertexPose *vertex_pose = new VertexPose();
+    VertexSE3Expmap *vertex_pose = new VertexSE3Expmap();
     vertex_pose -> setId(0);
     vertex_pose -> setEstimate(current_frame_ -> Pose());
     optimizer.addVertex(vertex_pose);
 
     Eigen::Matrix3d K = camera_left_ -> K();
+    Sophus::SE3d left_extrinsics = camera_left_ -> Pose();
 
     int index = 0; 
-    std::vector<EdgeProjectionPoseOnly *> edges;
+    std::vector<EdgeSE3ProjectXYZPoseOnly *> edges;
     std::vector<std::shared_ptr<Feature>> features;
     for (auto& feat : (current_frame_ -> features_left_)) {
         auto mp = feat -> mappoint_.lock();
         if (mp) {
             features.push_back(feat);
-            EdgeProjectionPoseOnly* edge = new EdgeProjectionPoseOnly(mp -> pos_, K);
+            EdgeSE3ProjectXYZPoseOnly* edge = new EdgeSE3ProjectXYZPoseOnly(mp -> pos_, K, left_extrinsics);
             edge -> setId(index);
             edge -> setVertex(0, vertex_pose);
             edge -> setMeasurement(Eigen::Vector2d(feat -> position_.pt.x, feat -> position_.pt.y));
@@ -311,7 +318,7 @@ int Frontend::EstimateCurrentPose() {
 
 bool Frontend::InsertKeyFrame() {
 /**
- * //TODO: detailing the conditions for KF insertion
+ * //TODO: KF insertion
  * @brief 判断当前帧是否需要插入关键帧
  * 
  * Step 1：纯VO模式下不插入关键帧，如果局部地图被闭环检测使用，则不插入关键帧
@@ -338,6 +345,8 @@ bool Frontend::InsertKeyFrame() {
     TriangulateNewPoints();
 
     backend_-> UpdateMap();
+
+    
 
     if (viewer_) viewer_ -> UpdateMap();
 
@@ -369,7 +378,7 @@ int Frontend::TriangulateNewPoints() {
                                 current_frame_->features_right_[i] -> position_.pt.y))
         };
         Eigen::Vector3d pw = Eigen::Vector3d::Zero();
-        if (TriangulatePoints(poses, points, pw) && pw[2] > 0) {
+        if (TriangulatePoints(poses, points, pw)) {
             auto new_mappoint = MapPoint::CreateNewMapPoint();
             pw = current_pose_Twc * pw;
             new_mappoint -> SetPos(pw);
@@ -401,7 +410,7 @@ void Frontend::SaveTrajectoryKITTI() {
 }
 
 int Frontend::TrackLocalMap() {
-    // TODO: complete TrackLocalMap
+    // TODO: TrackLocalMap
     return tracking_inliers_;
     /*
     std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
@@ -460,11 +469,134 @@ int Frontend::TrackLocalMap() {
 }
 
 void Frontend::PredictCurrentPose() {
-    //TODO: complete PredictCurrentPose
-    if (map_->isImuInitialized() == false && last_frame_ != nullptr) {
+    //TODO: PredictCurrentPose
+    if (map_->isImuInitialized() == false) {
         current_frame_ -> SetPose(relative_motion_ * last_frame_ -> Pose());
         return;
     }
+    
+    current_frame_->SetPose(last_keyframe_->Pose());
+    current_frame_->SetVelocitynBias(last_keyframe_->Velocity(), last_keyframe_->BiasG(), last_keyframe_->BiasA());
+
+   // current_frame_->IMUPreintegration
 
 }
-} // namespace demoam
+
+void Frontend::PreintegrateIMU() { 
+    if (current_frame_->imu_meas_.empty()) {
+        return;
+        // like the first frame 
+    }
+    imu_meas_since_RefKF_.insert(imu_meas_since_RefKF_.end(), 
+                                   current_frame_->imu_meas_.begin(), 
+                                   current_frame_->imu_meas_.end());
+
+    imu_preintegrator_from_lastframe_.reset(new IMUPreintegration(current_frame_->BiasG(), current_frame_->BiasA()));
+
+    const auto &imu = current_frame_->imu_meas_;
+
+    {   // consider the gap between the last KF and the first IMU
+        // delta time
+        double dt = std::max(0., imu[0].timestamp_ - last_frame_->time_stamp_);
+        // update pre-integrator
+        imu_preintegrator_from_lastframe_->Integrate(imu[0], dt);
+        imu_preintegrator_from_RefKF_->Integrate(imu[0], dt);
+        
+    }
+
+    for (size_t i = 0; i < current_frame_->imu_meas_.size(); i++) {
+        double nextt;
+        if (i == imu.size() - 1)
+            nextt = current_frame_->time_stamp_;
+        else
+            nextt = imu[i+1].timestamp_;  // regular condition, next is imu data
+        // delta time
+        double dt = std::max(0., nextt - imu[i].timestamp_);
+        // update pre-integrator
+        imu_preintegrator_from_lastframe_->Integrate(imu[i], dt);
+        imu_preintegrator_from_RefKF_->Integrate(imu[i], dt);
+    }
+    
+}
+
+void Frontend::IMUInitialization() {
+    return;
+    //TODO: IMUInitialization
+
+    // Step0. get all keyframes in map
+    //        reset v/bg/ba to 0
+    //        re-compute pre-integration
+    auto all_KFs = map_->GetAllKeyFrames();
+    int n = all_KFs.size();
+    if (n < settings::NUM_KFs_FOR_IMU_INIT) return; 
+
+    // Step1. gyroscope bias estimation
+    //        update bg and re-compute pre-integration
+    Vector3d bgest = IMUInitEstBg(all_KFs);
+    for (auto& [_, KF]: all_KFs) {
+        KF->SetBiasG(bgest);
+    }
+    for (int i = 1; i < n; i++) {
+        all_KFs[i]->ReComputeIMUPreIntegration();
+    }
+
+    // Step2. accelerometer bias and gravity estimation (gv = Rvw*gw)
+    // let's first assume ba is given by prior and solve the gw
+    // Step 2.1 gravity estimation
+
+    // Solve C*x=D for x=[gw] (3+3)x1 vector
+    // \see section IV in "Visual Inertial Monocular SLAM with Map Reuse"
+
+}
+
+Vector3d Frontend::IMUInitEstBg(const std::map<u_long, std::shared_ptr<Frame>>& vpKFs) {
+    typedef g2o::BlockSolverX BlockSolverType;
+    typedef g2o::LinearSolverEigen<BlockSolverType::PoseMatrixType> LinearSolverType;
+    auto solver = new g2o::OptimizationAlgorithmGaussNewton(
+        g2o::make_unique<BlockSolverType> (g2o::make_unique<LinearSolverType>())
+    );
+    g2o::SparseOptimizer optimizer;
+    optimizer.setAlgorithm(solver);
+    
+    // Add vertex of gyro bias, to optimizer graph
+    VertexGyroBias *vertex_biasg = new VertexGyroBias();
+    vertex_biasg->setId(0);
+    vertex_biasg->setEstimate(Eigen::Vector3d::Zero());
+    optimizer.addVertex(vertex_biasg);
+
+    // Add unary edges for gyro bias vertex
+    std::shared_ptr<Frame> pPrevKF0 = vpKFs.begin()->second;
+    for (auto& [_ , pKF] : vpKFs) {
+        // Ignore the first KF
+        if (_ == vpKFs.begin()->first)
+            continue;
+
+        std::shared_ptr<Frame> pPrevKF = pKF->reference_KF_.lock();
+
+        auto& imupreint = pKF->IMUPreintegrator();
+        EdgeGyroBias *edge_biasg = new EdgeGyroBias();
+        edge_biasg->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(0)));
+
+        // measurement is not used in EdgeGyrBias
+        edge_biasg->dRbij = imupreint->GetDeltaRotation(imupreint->bg_).matrix();
+        edge_biasg->J_dR_bg = imupreint->dR_dbg_;
+        edge_biasg->Rwbi = pPrevKF->Pose().rotationMatrix();
+        edge_biasg->Rwbj = pKF->Pose().rotationMatrix();
+        edge_biasg->setInformation(imupreint->cov_.bottomRightCorner(3, 3).inverse());
+        optimizer.addEdge(edge_biasg);
+
+        pPrevKF0 = pKF;
+    }
+
+    // It's actualy a linear estimator, so 1 iteration is enough.
+    optimizer.initializeOptimization();
+    optimizer.optimize(1);
+
+    // update bias G
+    VertexGyroBias *vBgEst = static_cast<VertexGyroBias *>(optimizer.vertex(0));
+
+    return vBgEst->estimate();
+}
+
+
+} // namespace demoam 

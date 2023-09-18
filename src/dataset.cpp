@@ -6,6 +6,7 @@
 #include "camera.h"
 #include "frame.h"
 #include "imu_types.h"
+#include "geometric_tools.h"
 
 namespace demoam {
     
@@ -47,6 +48,36 @@ bool Dataset::LoadCalib() {
         return false;
     }
 
+    Sophus::SE3d Tvi, Tiv; // per Kitti calibration
+    {
+        Eigen::Matrix3d R;
+        Eigen::Vector3d t;
+        R << 9.999976e-01, 7.553071e-04, -2.035826e-03, 
+            -7.854027e-04, 9.998898e-01, -1.482298e-02,
+            2.024406e-03, 1.482454e-02, 9.998881e-01;
+        R = NormalizeRotation(R);
+        t << -8.086759e-01, 3.195559e-01, -7.997231e-01;
+        Tvi = Sophus::SE3d(R, t);
+        Tiv = Tvi.inverse();
+    }
+
+    Sophus::SE3d Tcv, Tvc;
+    {
+        Eigen::Matrix3d R;
+        Eigen::Vector3d t;
+        R << 7.027555e-03, -9.999753e-01, 2.599616e-05,
+            -2.254837e-03, -4.184312e-05, -9.999975e-01,
+             9.999728e-01, 7.027479e-03, -2.255075e-03;
+        R = NormalizeRotation(R);
+        t << -7.137748e-03, -7.482656e-02, -3.336324e-01;
+        Tcv = Sophus::SE3d(R, t);
+        Tvc = Tcv.inverse();
+    }
+
+    Sophus::SE3d Tci, Tci_inv;
+    Tci = Tcv * Tvi;
+    Tci_inv = Tci.inverse();
+
     for (int i = 0; i < 4; ++i) {
         char camera_name[3];
         for (int k = 0; k < 3; ++k) {
@@ -66,10 +97,15 @@ bool Dataset::LoadCalib() {
         t = K.inverse() * t; // from pixels to metres
         K = K * 0.5; // for later down sample
 
+        Sophus::SE3d pose = Sophus::SE3d(Sophus::SO3d(), t);
+
         std::shared_ptr<Camera> new_camera(new Camera(K(0, 0), K(1, 1), K(0, 2), K(1, 2), 
-                                                    t.norm(), Sophus::SE3d(Sophus::SO3d(), t)                                                 
+                                                    t.norm(), pose                                              
         ));
+        new_camera->tci = Tci;
+        new_camera->tci_inv = Tci_inv;
         cameras_.push_back(new_camera);
+        
         LOG(INFO) << "Dataset::Init(): Camera " << i << " extrinsics: " << t.transpose();
     }
     fin.close();
@@ -171,14 +207,16 @@ std::shared_ptr<Frame> Dataset::NextFrame() {
                cv::INTER_NEAREST);
     cv::resize(image_right, image_right_resized, cv::Size(), 0.5, 0.5,
                cv::INTER_NEAREST);
+    
 
     // Load imu measurements from previous frame
-    std::vector<IMU::Point, Eigen::aligned_allocator<IMU::Point>> imu_meas_since_last_frame;
+    std::vector<IMU, Eigen::aligned_allocator<IMU>> imu_meas_since_last_frame;
     if (current_image_index_ > 0) {
         while (vTimestampsImu_[first_imu_] <= vTimestampsCam_[current_image_index_]) {
-            imu_meas_since_last_frame.push_back(IMU::Point(vAcc_[first_imu_].x, vAcc_[first_imu_].y, vAcc_[first_imu_].z,
-                                        vGyro_[first_imu_].x, vGyro_[first_imu_].y, vGyro_[first_imu_].z,
-                                        vTimestampsImu_[first_imu_]));
+            imu_meas_since_last_frame.push_back(IMU(vTimestampsImu_[first_imu_], 
+                                                    vGyro_[first_imu_].x, vGyro_[first_imu_].y, vGyro_[first_imu_].z,
+                                                    vAcc_[first_imu_].x, vAcc_[first_imu_].y, vAcc_[first_imu_].z
+                                                ));
             first_imu_++;
         }
     }
@@ -187,7 +225,8 @@ std::shared_ptr<Frame> Dataset::NextFrame() {
     new_frame -> img_left_ = image_left_resized;
     new_frame -> img_right_ = image_right_resized;
     new_frame -> time_stamp_ = vTimestampsCam_[current_image_index_];
-    new_frame -> imu_meas_since_last_frame_ = imu_meas_since_last_frame; 
+    new_frame -> imu_meas_ = imu_meas_since_last_frame; 
+
     current_image_index_++;
     return new_frame;
 }

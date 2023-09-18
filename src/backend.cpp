@@ -32,13 +32,13 @@ void Backend::BackendLoop() {
     while (backend_running_.load()) {
         std::unique_lock<std::mutex> lck(data_mutex_);
         map_update_.wait(lck);
-        std::unordered_map<u_long, std::shared_ptr<Frame>> active_keyframes = map_ -> GetActiveKeyFrames();
+        std::map<u_long, std::shared_ptr<Frame>> active_keyframes = map_ -> GetActiveKeyFrames();
         std::unordered_map<u_long, std::shared_ptr<MapPoint>> active_mappoints = map_ -> GetActiveMapPoints();
         Optimize(active_keyframes, active_mappoints);
     }
 }
 
-void Backend::Optimize(std::unordered_map<u_long, std::shared_ptr<Frame>>& keyframes, std::unordered_map<u_long, std::shared_ptr<MapPoint>>& mappoints) {
+void Backend::Optimize(std::map<u_long, std::shared_ptr<Frame>>& keyframes, std::unordered_map<u_long, std::shared_ptr<MapPoint>>& mappoints) {
     typedef g2o::BlockSolver_6_3 BlockSolverType;
     typedef g2o::LinearSolverCSparse<BlockSolverType::PoseMatrixType> LinearSolverType;
     auto solver = new g2o::OptimizationAlgorithmLevenberg(
@@ -47,9 +47,9 @@ void Backend::Optimize(std::unordered_map<u_long, std::shared_ptr<Frame>>& keyfr
     optimizer.setAlgorithm(solver);
 
     u_long max_kf_id = 0;
-    std::map<u_long, VertexPose*> vertices;
+    std::map<u_long, VertexSE3Expmap*> vertices;
     for (auto& [_, kf] : keyframes) {
-        VertexPose* vertex_pose = new VertexPose();
+        VertexSE3Expmap* vertex_pose = new VertexSE3Expmap();
         vertex_pose -> setId(kf -> keyframe_id_);
         vertex_pose -> setEstimate(kf -> Pose());
         optimizer.addVertex(vertex_pose);
@@ -62,8 +62,8 @@ void Backend::Optimize(std::unordered_map<u_long, std::shared_ptr<Frame>>& keyfr
     Sophus::SE3d right_extrinsics = camera_right_ -> Pose();
 
 
-    std::map<u_long, VertexXYZ*> vertices_mappoints;
-    std::vector<EdgeProjection*> edges;
+    std::map<u_long, VertexSBAPointXYZ*> vertices_mappoints;
+    std::vector<EdgeSE3ProjectXYZ*> edges;
     std::vector<std::shared_ptr<Feature>> features;
     int index = 0; 
     
@@ -74,7 +74,7 @@ void Backend::Optimize(std::unordered_map<u_long, std::shared_ptr<Frame>>& keyfr
         }
 
         if (vertices_mappoints.count(mp -> id_) == false) {
-            VertexXYZ* v = new VertexXYZ;
+            VertexSBAPointXYZ* v = new VertexSBAPointXYZ;
             v -> setEstimate(mp -> Pos());
             v -> setId(mp -> id_ + max_kf_id + 1);
             v -> setMarginalized(true);
@@ -86,7 +86,7 @@ void Backend::Optimize(std::unordered_map<u_long, std::shared_ptr<Frame>>& keyfr
             auto feat = obs.lock();
             if (!feat || feat -> is_outlier_ || !feat -> frame_.lock()) continue;
             auto frame = feat -> frame_.lock();
-            EdgeProjection* edge = new EdgeProjection(K, feat -> is_on_left_image_ ? left_extrinsics : right_extrinsics);
+            EdgeSE3ProjectXYZ* edge = new EdgeSE3ProjectXYZ(K, feat -> is_on_left_image_ ? left_extrinsics : right_extrinsics);
             edge -> setId(index);
             edge -> setVertex(0, vertices[frame -> keyframe_id_]);
             edge -> setVertex(1, vertices_mappoints[mp -> id_]);

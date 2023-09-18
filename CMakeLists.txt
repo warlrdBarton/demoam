@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.4.0)
 project(demoam)
 
 set(CMAKE_BUILD_TYPE "Release")
+#set(CMAKE_BUILD_TYPE "Debug")
+
 set(CMAKE_CXX_FLAGS_DEBUG "-std=c++17 -g -Wall")
 set(CMAKE_CXX_FLAGS_RELEASE  "-std=c++17 -O3 -fopenmp -pthread")
 # -O3 level will unexpectedly optimize out some specific temp var, which leads to memory double free;
