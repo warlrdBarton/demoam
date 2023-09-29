@@ -28,17 +28,24 @@ void Backend::Stop() {
     backend_thread_.join();
 }
 
+bool Backend::IsCurrentlyBusy() {
+    std::unique_lock<std::mutex> lck(data_mutex_);
+    return is_busy_;
+}
+
 void Backend::BackendLoop() {
     while (backend_running_.load()) {
         std::unique_lock<std::mutex> lck(data_mutex_);
         map_update_.wait(lck);
-        std::map<u_long, std::shared_ptr<Frame>> active_keyframes = map_ -> GetActiveKeyFrames();
+        is_busy_ = true;
+        std::unordered_map<u_long, std::shared_ptr<Frame>> active_keyframes = map_ -> GetActiveKeyFrames();
         std::unordered_map<u_long, std::shared_ptr<MapPoint>> active_mappoints = map_ -> GetActiveMapPoints();
         Optimize(active_keyframes, active_mappoints);
+        is_busy_ = false;
     }
 }
 
-void Backend::Optimize(std::map<u_long, std::shared_ptr<Frame>>& keyframes, std::unordered_map<u_long, std::shared_ptr<MapPoint>>& mappoints) {
+void Backend::Optimize(std::unordered_map<u_long, std::shared_ptr<Frame>>& keyframes, std::unordered_map<u_long, std::shared_ptr<MapPoint>>& mappoints) {
     typedef g2o::BlockSolver_6_3 BlockSolverType;
     typedef g2o::LinearSolverCSparse<BlockSolverType::PoseMatrixType> LinearSolverType;
     auto solver = new g2o::OptimizationAlgorithmLevenberg(
@@ -47,7 +54,7 @@ void Backend::Optimize(std::map<u_long, std::shared_ptr<Frame>>& keyframes, std:
     optimizer.setAlgorithm(solver);
 
     u_long max_kf_id = 0;
-    std::map<u_long, VertexSE3Expmap*> vertices;
+    std::unordered_map<u_long, VertexSE3Expmap*> vertices;
     for (auto& [_, kf] : keyframes) {
         VertexSE3Expmap* vertex_pose = new VertexSE3Expmap();
         vertex_pose -> setId(kf -> keyframe_id_);
@@ -62,7 +69,7 @@ void Backend::Optimize(std::map<u_long, std::shared_ptr<Frame>>& keyframes, std:
     Sophus::SE3d right_extrinsics = camera_right_ -> Pose();
 
 
-    std::map<u_long, VertexSBAPointXYZ*> vertices_mappoints;
+    std::unordered_map<u_long, VertexSBAPointXYZ*> vertices_mappoints;
     std::vector<EdgeSE3ProjectXYZ*> edges;
     std::vector<std::shared_ptr<Feature>> features;
     int index = 0; 

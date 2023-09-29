@@ -13,10 +13,10 @@ class Backend;
 class Viewer;
 
 enum FrontendStatus { 
-    INITING, 
-    OK, 
-    RECENTLY_LOST, 
-    LOST 
+    INITING, // 0
+    OK, // 1
+    RECENTLY_LOST, // 2
+    LOST // 3
 };
 
 class Frontend {
@@ -43,7 +43,8 @@ class Frontend {
     int DetectFastInLeft();
     int SearchLastFrameOpticalFlow();
     int SearchInRightOpticalFlow();
-    int EstimateCurrentPose();
+    int SearchReferenceKFOpticalFlow();
+    int OptimizeCurrentPose();
     bool InsertKeyFrame();
     void SetObservationsForKeyFrame();
     int TriangulateNewPoints();
@@ -51,8 +52,8 @@ class Frontend {
     int TrackLocalMap();
     void PredictCurrentPose();
     void PreintegrateIMU();
-    void IMUInitialization();
-    Vector3d IMUInitEstBg(const std::map<u_long, std::shared_ptr<Frame>>& vpKFs);
+    bool IMUInitialization();
+    Vector3d IMUInitEstBg(const std::unordered_map<u_long, std::shared_ptr<Frame>>& vpKFs);
 
 
     std::ofstream save_to_file_;
@@ -73,13 +74,17 @@ class Frontend {
     Sophus::SE3d relative_motion_;
     std::vector<IMU, Eigen::aligned_allocator<IMU>> imu_meas_since_RefKF_; 
                                                                                            
-    std::shared_ptr<IMUPreintegration> imu_preintegrator_from_lastframe_, imu_preintegrator_from_RefKF_; 
- 
+    std::shared_ptr<IMUPreIntegration> imu_preintegrator_from_RefKF_; 
+
+    Eigen::Vector3d g_world_ = Vector3d(0, 0, settings::GRAVITY_VALUE);
+
     int tracking_inliers_ = 0;
 
     int num_features_init_ = 100;
     int num_features_tracking_good_ = 50;
     int num_features_needed_for_keyframe_ = 80;
+
+    int num_kfs_for_imu_init_ = 5;
 
     std::shared_ptr<cv::FastFeatureDetector> fast_detector_;
 };

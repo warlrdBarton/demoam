@@ -30,6 +30,7 @@ namespace demoam {
     using Eigen::Vector2f;
     using Eigen::Vector3f;
     using Eigen::Vector4f;
+    using Eigen::VectorXd;
 
     using Eigen::Matrix2f;
     using Eigen::Matrix3f;
@@ -37,6 +38,7 @@ namespace demoam {
     using Eigen::Matrix2d;
     using Eigen::Matrix3d;
     using Eigen::Matrix4d;
+    using Eigen::MatrixXd;
     using Eigen::Quaterniond;
 
     // other things I need in optimiztion

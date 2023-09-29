@@ -63,9 +63,10 @@ bool VisualOdometry::Step() {
     auto time_used = std::chrono::duration_cast<std::chrono::duration<double>>(t2 - t1);
     LOG(INFO) << "VisualOdometry::Step(): VO cost time: " << time_used.count() << " seconds.";
 
+    //Pause when tracking failed
     if (!success) {
-        //TODO: TEST
-        cv::waitKey(0);
+        LOG(INFO) << "TRACKING FAILED";
+        cv::waitKey(0);       
     }
 
     return success;

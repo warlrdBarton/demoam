@@ -42,7 +42,7 @@ class Viewer {
     std::thread viewer_thread_;
     bool viewer_running_ = true;
 
-    std::map<unsigned long, std::shared_ptr<Frame>> active_keyframes_;
+    std::unordered_map<unsigned long, std::shared_ptr<Frame>> active_keyframes_;
     std::unordered_map<unsigned long, std::shared_ptr<MapPoint>> active_mappoints_;
     
     bool map_updated_ = false;

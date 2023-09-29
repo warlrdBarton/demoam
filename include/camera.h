@@ -43,10 +43,6 @@ class Camera {
     double fx_ = 0, fy_ = 0, cx_ = 0, cy_ = 0, baseline_ = 0;
     Sophus::SE3d pose_; //Tcc0
     Sophus::SE3d pose_inv_;
-
- public:
-    Sophus::SE3d tci;
-    Sophus::SE3d tci_inv;
 };
 
 } // namespace demoam

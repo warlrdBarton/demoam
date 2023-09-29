@@ -3,6 +3,7 @@
 
 #include "common_include.h"
 #include "imu_types.h"
+#include "config.h"
 
 namespace demoam {
     
@@ -22,9 +23,14 @@ struct Frame {
 
     // --------------------------------------------------------------------
     // Getters 
-    inline Sophus::SE3d Pose() {
+    inline Sophus::SE3d Pose() { // Tcw
         std::unique_lock<std::mutex> lck(data_mutex_);
         return pose_;
+    }
+
+    inline Sophus::SE3d ImuPose() { //Twb
+        std::unique_lock<std::mutex> lck(data_mutex_);
+        return pose_.inverse() * settings::Tcb;
     }
 
     inline void SetPose(const Sophus::SE3d& pose) {
@@ -69,7 +75,10 @@ struct Frame {
         velocity_n_bias_.segment<3>(6) = bias_a;
     }
 
-    const auto& IMUPreintegrator() { return imu_preintegrator_from_RefKF_; }
+    const auto& GetIMUPreInt() { return imu_preintegrator_from_RefKF_; }
+
+    // count the well tracked map points in this frame
+    int TrackedMapPoints(const int &minObs);
  
     // --------------------------------------------------------------------
     // Data
@@ -90,7 +99,7 @@ struct Frame {
     std::vector<IMU, Eigen::aligned_allocator<IMU>> imu_meas_;  // For KF, it stores measurements from reference KeyFrame
                                                                             // For the rest frames, keeps measurements up to the last frame
 
-    std::shared_ptr<IMUPreintegration> imu_preintegrator_from_RefKF_; // this one trace back to last KF,
+    std::shared_ptr<IMUPreIntegration> imu_preintegrator_from_RefKF_; // this one trace back to last KF,
                                                  // inter-frame IMU integration use a temporary one stored in Frontend Class
 
 

@@ -15,11 +15,10 @@ imu.gyroscope_random_walk: 2.91e-006
 #Frequency
 imu.frequency: 100
 
-#extrinsics
-#imu.Tci: 7.812974061203591e-03 -9.998594093786392e-01 1.483430024423826e-02 -3.323895590633578e-01 -4.279199663676776e-03 -1.486804454193362e-02 -9.998803895842286e-01 7.267046018167079e-01 9.999603154769388e-01 7.748560677920580e-03 -4.394761463307720e-03 -1.138237196069211e+00
+NUM_KFs_FOR_IMU_INIT: 5
 
-threshold_fast_detector: 10
+
+threshold_fast_detector: 20
 num_features_init: 100
-num_features_tracking_good: 50
-num_features_tracking_bad: 20
+num_features_tracking_good: 20
 num_features_needed_for_keyframe: 80

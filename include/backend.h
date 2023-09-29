@@ -22,9 +22,11 @@ class Backend {
     void UpdateMap();
     void Stop();
 
+    bool IsCurrentlyBusy();
+
  private:
     void BackendLoop();
-    void Optimize(std::map<u_long, std::shared_ptr<Frame>>& keyframes, std::unordered_map<u_long, std::shared_ptr<MapPoint>>& mappoints);
+    void Optimize(std::unordered_map<u_long, std::shared_ptr<Frame>>& keyframes, std::unordered_map<u_long, std::shared_ptr<MapPoint>>& mappoints);
 
     std::shared_ptr<Map> map_ = nullptr;
     std::shared_ptr<Camera> camera_left_ = nullptr;
@@ -35,6 +37,8 @@ class Backend {
     std::thread backend_thread_;
     std::condition_variable map_update_;
     std::atomic_bool backend_running_;
+
+    bool is_busy_ = false;
 };
 
 }  // namespace demoam

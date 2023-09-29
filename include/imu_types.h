@@ -2,6 +2,7 @@
 #define DEMOAM__IMU_TYPES_H
 
 #include "common_include.h"
+#include "config.h"
 
 namespace demoam
 {
@@ -25,43 +26,182 @@ using IMUPtr = std::shared_ptr<IMU>;
 
 /*
 * IMU PreIntegrator
-* Call Integrate to insert new IMU reading, call Getters for preintegrated measurements 
+* Call update to insert new IMU reading, call Getters for preintegrated measurements 
 * Jacobian are also computed in this class, which can be used to edges of g2o
 */
-class IMUPreintegration {
+class IMUPreIntegration {
    public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    
+    IMUPreIntegration() {
+        reset();
+    }
 
-    IMUPreintegration(const Vector3d &original_bg = Vector3d::Zero(), const Vector3d &original_ba = Vector3d::Zero());
+    // reset to initial state
+    inline void reset() {
+        // delta measurements, position/velocity/rotation(matrix)
+        _delta_P.setZero();    // P_k+1 = P_k + V_k*dt + R_k*a_k*dt*dt/2
+        _delta_V.setZero();    // V_k+1 = V_k + R_k*a_k*dt
+        _delta_R.setIdentity();    // R_k+1 = R_k*exp(w_k*dt).     note: Rwc, Rwc'=Rwc*[w_body]x
 
-    void Integrate(const IMU &imu, double dt);
+        // jacobian of delta measurements w.r.t bias of gyro/acc
+        _J_P_Biasg.setZero();     // position / gyro
+        _J_P_Biasa.setZero();     // position / acc
+        _J_V_Biasg.setZero();     // velocity / gyro
+        _J_V_Biasa.setZero();     // velocity / acc
+        _J_R_Biasg.setZero();   // rotation / gyro
 
+        // noise covariance propagation of delta measurements
+        _cov_P_V_Phi.setZero();
 
-   // NavStated Predict(const NavStated &start, const Vector3d &grav = Vector3d(0, 0, -9.81)) const;
+        _delta_time = 0;
 
-    SO3d GetDeltaRotation(const Vector3d &bg);
-    Vector3d GetDeltaVelocity(const Vector3d &bg, const Vector3d &ba);
-    Vector3d GetDeltaPosition(const Vector3d &bg, const Vector3d &ba);
+        // covariance of delta measurements
+        const float ng2 = settings::gyroscope_noise_density * settings::gyroscope_noise_density;
+        const float na2 = settings::accelerometer_noise_density * settings::accelerometer_noise_density;
+        mfGyrMeasCov = Matrix3d::Identity() * ng2;       // sigma_g * sigma_g / dt
+        mfAccMeasCov = Matrix3d::Identity() * na2;
+    }
 
-   public:
-    double dt_ = 0;                          
-    Matrix9d cov_ = Matrix9d::Zero();              
-    Matrix6d noise_gyro_acce_ = Matrix6d::Zero();  
+            // incrementally update 1)delta measurements, 2)jacobians, 3)covariance matrix
+    void update(const Vector3d& omega, const Vector3d& acc, const double& dt) {
+        float dt2 = dt * dt;
+        Matrix3d dR = SO3d::exp(omega * dt).matrix();
+        Matrix3d Jr = SO3d::jr(omega * dt).matrix();
+        Matrix3d I3x3 = Matrix3d::Identity();
+        Matrix9d A = Matrix9d::Identity();
+        Matrix3d acc_h = SO3d::hat(acc).matrix();
 
-    // Bias used when computing preintegration
-    // the updated val stores in each frame;
-    Vector3d bg_ = Vector3d::Zero();
-    Vector3d ba_ = Vector3d::Zero();
+        // noise propagation, see Forster's paper APPENDIX A.
+        A.block<3, 3>(6, 6) = dR.transpose();
+        A.block<3, 3>(3, 6) = -_delta_R * acc_h * dt;
+        A.block<3, 3>(0, 6) = -0.5 * _delta_R * acc_h * dt2;
+        A.block<3, 3>(0, 3) = I3x3 * dt;
 
-    SO3d dR_;
-    Vector3d dv_ = Vector3d::Zero();
-    Vector3d dp_ = Vector3d::Zero();
+        Eigen::Matrix<double, 9, 3> Bg;
+        Bg.setZero();
+        Bg.block<3, 3>(6, 0) = Jr * dt;
 
-    Matrix3d dR_dbg_ = Matrix3d::Zero();
-    Matrix3d dV_dbg_ = Matrix3d::Zero();
-    Matrix3d dV_dba_ = Matrix3d::Zero();
-    Matrix3d dP_dbg_ = Matrix3d::Zero();
-    Matrix3d dP_dba_ = Matrix3d::Zero();
+        Eigen::Matrix<double, 9, 3> Ca;
+        Ca.setZero();
+        Ca.block<3, 3>(3, 0) = -_delta_R * dt;
+        Ca.block<3, 3>(0, 0) = 0.5 * _delta_R * dt2;
+        _cov_P_V_Phi = A * _cov_P_V_Phi * A.transpose()
+                       + Bg * mfGyrMeasCov * Bg.transpose()
+                       + Ca * mfAccMeasCov * Ca.transpose();
+
+        // calculate the jacobians
+        // NOTE see Forster's paper appendix B. Bias correction via first order updates
+        _J_P_Biasa += _J_V_Biasa * dt - 0.5 * _delta_R * dt2;
+        _J_P_Biasg += _J_V_Biasg * dt - 0.5 * _delta_R * acc_h * _J_R_Biasg * dt2;
+        _J_V_Biasa += -_delta_R * dt;
+        _J_V_Biasg += -_delta_R * acc_h * _J_R_Biasg * dt;
+        _J_R_Biasg = dR.transpose() * _J_R_Biasg - Jr * dt;
+
+        // delta measurements, position/velocity/rotation(matrix)
+        // update P first, then V, then R. because P's update need V&R's previous state
+        _delta_P += _delta_V * dt + 0.5 * _delta_R * acc * dt2;    // P_k+1 = P_k + V_k*dt + R_k*a_k*dt*dt/2
+        _delta_V += _delta_R * acc * dt;
+        _delta_R = normalizeRotationM(
+                _delta_R * dR);  // normalize rotation, in case of numerical error accumulation
+
+        // delta time
+        _delta_time += dt;
+    }
+
+    inline Matrix3d normalizeRotationM(const Matrix3d &R) {
+        Quaterniond qr(R);
+        return normalizeRotationQ(qr).toRotationMatrix();
+    }
+
+    inline Quaterniond normalizeRotationQ(const Quaterniond &r) {
+        Quaterniond _r(r);
+        if (_r.w() < 0) {
+            _r.coeffs() *= -1;
+        }
+        return _r.normalized();
+    }
+
+    // accessors
+    // delta measurements, position/velocity/rotation(matrix)
+    inline Eigen::Vector3d getDeltaP() const    // P_k+1 = P_k + V_k*dt + R_k*a_k*dt*dt/2
+    {
+        return _delta_P;
+    }
+
+    inline Eigen::Vector3d getDeltaV() const    // V_k+1 = V_k + R_k*a_k*dt
+    {
+        return _delta_V;
+    }
+
+    inline Eigen::Matrix3d getDeltaR() const   // R_k+1 = R_k*exp(w_k*dt).     NOTE: Rwc, Rwc'=Rwc*[w_body]x
+    {
+        return _delta_R;
+    }
+
+    // jacobian of delta measurements w.r.t bias of gyro/acc
+    inline Eigen::Matrix3d getJPBiasg() const     // position / gyro
+    {
+        return _J_P_Biasg;
+    }
+
+    inline Eigen::Matrix3d getJPBiasa() const     // position / acc
+    {
+        return _J_P_Biasa;
+    }
+
+    inline Eigen::Matrix3d getJVBiasg() const     // velocity / gyro
+    {
+        return _J_V_Biasg;
+    }
+
+    inline Eigen::Matrix3d getJVBiasa() const     // velocity / acc
+    {
+        return _J_V_Biasa;
+    }
+
+    inline Eigen::Matrix3d getJRBiasg() const     // rotation / gyro
+    {
+        return _J_R_Biasg;
+    }
+
+    // noise covariance propagation of delta measurements
+    // note: the order is rotation-velocity-position here
+
+    inline Matrix9d getCovPVPhi() const {
+        return _cov_P_V_Phi;
+    }
+
+    inline double getDeltaTime() const {
+        return _delta_time;
+    }
+    
+    /*
+     * NOTE:
+     * don't add pointer as member variable.
+     * operator = is used in g2o
+    */
+
+    // delta measurements, position/velocity/rotation(matrix)
+    Eigen::Vector3d _delta_P;    // P_k+1 = P_k + V_k*dt + R_k*a_k*dt*dt/2
+    Eigen::Vector3d _delta_V;    // V_k+1 = V_k + R_k*a_k*dt
+    Eigen::Matrix3d _delta_R;    // R_k+1 = R_k*exp(w_k*dt).     note: Rwc, Rwc'=Rwc*[w_body]x
+
+    // jacobian of delta measurements w.r.t bias of gyro/acc
+    Eigen::Matrix3d _J_P_Biasg;     // position / gyro
+    Eigen::Matrix3d _J_P_Biasa;     // position / acc
+    Eigen::Matrix3d _J_V_Biasg;     // velocity / gyro
+    Eigen::Matrix3d _J_V_Biasa;     // velocity / acc
+    Eigen::Matrix3d _J_R_Biasg;   // rotation / gyro
+
+    // noise covariance propagation of delta measurements
+    Matrix9d _cov_P_V_Phi;
+
+    // covariance of measurements
+    Matrix3d mfGyrMeasCov, mfAccMeasCov;
+
+    double _delta_time;
+
 };
 
 } // namespace demoam
