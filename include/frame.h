@@ -38,6 +38,14 @@ struct Frame {
         pose_ = pose;
     }
 
+    inline void SetPoseFromIMU(const Sophus::SE3d& pose) {
+        std::unique_lock<std::mutex> lck(data_mutex_);
+        SE3d Twb = pose;
+        SE3d Twc = Twb * settings::Tbc;
+        SE3d Tcw = Twc.inverse();
+        pose_ = Tcw;
+    }
+
     inline Eigen::Vector3d Velocity() {
         std::unique_lock<std::mutex> lck(data_mutex_);
         return velocity_n_bias_.segment<3>(0);

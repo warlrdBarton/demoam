@@ -48,7 +48,7 @@ void Viewer::ThreadLoop() {
             .SetBounds(0.0, 1.0, 0.0, 1.0, -1024.0f / 768.0f)
             .SetHandler(new pangolin::Handler3D(vis_camera));
 
-    // const float blue[3] = {0, 0, 1};
+    const float blue[3] = {0, 0, 1};
     const float green[3] = {0, 1, 0};
 
     while (!pangolin::ShouldQuit() && viewer_running_) {
@@ -58,7 +58,7 @@ void Viewer::ThreadLoop() {
 
         std::unique_lock<std::mutex> lock(viewer_data_mutex_);
         if (current_frame_) {
-            DrawFrame(current_frame_, green);
+            DrawFrame(current_frame_, current_frame_->features_left_.empty() ? blue : green);
             FollowCurrentFrame(vis_camera);
 
             cv::Mat img = PlotFrameImage();
@@ -72,6 +72,7 @@ void Viewer::ThreadLoop() {
 
         pangolin::FinishFrame();
         usleep(5000);
+        //cv::waitKey(0);
     }
 
     LOG(INFO) << "Viewer::ThreadLoop(): Stop viewer";

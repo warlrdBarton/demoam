@@ -76,7 +76,7 @@ class Frontend {
                                                                                            
     std::shared_ptr<IMUPreIntegration> imu_preintegrator_from_RefKF_; 
 
-    Eigen::Vector3d g_world_ = Vector3d(0, 0, settings::GRAVITY_VALUE);
+    Eigen::Vector3d g_= Vector3d(0, 0, settings::GRAVITY_VALUE);
 
     int tracking_inliers_ = 0;
 

@@ -20,6 +20,10 @@
 
 namespace demoam {
 
+    using std::vector;
+    using std::shared_ptr;
+    using std::endl;
+
     using Sophus::SO3f;
     using Sophus::SE3f;
     using Sophus::SO3d;
@@ -32,6 +36,7 @@ namespace demoam {
     using Eigen::Vector4f;
     using Eigen::VectorXd;
 
+    using Eigen::Matrix;
     using Eigen::Matrix2f;
     using Eigen::Matrix3f;
     using Eigen::Matrix4f;

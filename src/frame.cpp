@@ -18,6 +18,7 @@ void Frame::SetKeyFrame() {
 }
 
 void Frame::ReComputeIMUPreIntegration() {
+    if (reference_KF_.expired()) return;
     imu_preintegrator_from_RefKF_->reset();
 
     Vector3d bg = reference_KF_.lock()->BiasG();

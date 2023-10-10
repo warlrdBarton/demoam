@@ -149,12 +149,8 @@ bool Frontend::Track() {
     InsertKeyFrame();
 
     if (map_->isImuInitialized() == false) {
-        if(IMUInitialization()) {
-            cv::waitKey(0);
-        }
-    } else {
-        cv::waitKey(0);
-    }
+        IMUInitialization();
+    } 
 
     if (status_ == FrontendStatus::OK) relative_motion_ = current_frame_ -> Pose() * last_frame_ -> Pose().inverse();
     
@@ -185,7 +181,6 @@ int Frontend::DetectFastInLeft() {
     return cntDetected;
 }
 
-//TODO: GMS
 int Frontend::SearchLastFrameOpticalFlow() {
     std::vector<cv::Point2f> kps_last, kps_current; 
     for (auto& kp : last_frame_ -> features_left_) {
@@ -524,7 +519,6 @@ int Frontend::TrackLocalMap() {
 }
 
 void Frontend::PredictCurrentPose() {
-    // TODO: acce flies away
     if (map_->isImuInitialized() == false) {
         current_frame_ -> SetPose(relative_motion_ * last_frame_ -> Pose());
         return;
@@ -544,14 +538,19 @@ void Frontend::PredictCurrentPose() {
     Vector3d Vwbpre = current_frame_->Velocity();
 
     Matrix3d Rwb = Rwbpre * dR;
-    Vector3d Pwb = Pwbpre + Vwbpre * dt + 0.5 * g_world_ * dt * dt + Rwbpre * dP;
-    Vector3d Vwb = Vwbpre + g_world_ * dt + Rwbpre * dV;    
+    Vector3d Pwb = Pwbpre + Vwbpre * dt + 0.5 * g_* dt * dt + Rwbpre * dP;
+    Vector3d Vwb = Vwbpre + g_* dt + Rwbpre * dV;    
     
     SE3d TWC = SE3d(Rwb, Pwb) * settings::Tbc;
     SE3d TCW = TWC.inverse();
 
     current_frame_->SetPose(TCW);
     current_frame_->SetVelocity(Vwb);
+
+    {//TODO: BLUE Predicion flies away
+        if (viewer_) viewer_ -> AddCurrentFrame(current_frame_);
+    }
+
 }
 
 void Frontend::PreintegrateIMU() { 
@@ -814,8 +813,9 @@ bool Frontend::IMUInitialization() {
             mp->SetWorldPos(Pw);
         }
          */
-        g_world_ = g0;
+        g_= g0;
         map_->is_imu_initialized_ = true;
+        backend_->SetGravity(g0);
         LOG(INFO) << "Frontend::IMUInitialization(): Successfully initialized IMU!";
         LOG(INFO) << "Estimated gravity before: " << gpre.transpose() << ", |gw| = " << gprenorm ;
         LOG(INFO) << "Estimated acc bias after: " << baest.transpose() ;

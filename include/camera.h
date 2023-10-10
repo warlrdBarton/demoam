@@ -22,6 +22,8 @@ class Camera {
              0, 0, 1;
         return k; 
     }
+    double fx() const { return fx_; }
+    double fy() const { return fy_; }
     Sophus::SE3d Pose() const {
         return pose_;
     }

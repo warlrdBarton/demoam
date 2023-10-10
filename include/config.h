@@ -9,10 +9,21 @@ namespace settings {
 
     const float GRAVITY_VALUE = 9.81;
     const float eps = 1e-4;
+
     const float accelerometer_noise_density = 0.01;
     const float gyroscope_noise_density = 0.000175;
     const float accelerometer_random_walk = 0.000167;
     const float gyroscope_random_walk = 2.91e-006;
+
+    const double gyrBiasRw2 = gyroscope_random_walk * gyroscope_random_walk;   
+    const double accBiasRw2 = accelerometer_random_walk * accelerometer_random_walk;  
+    const double gyrMeasError2 = gyroscope_noise_density * gyroscope_noise_density;   
+    const double accMeasError2 = accelerometer_noise_density * accelerometer_noise_density;  
+
+/*     const double gyrBiasRw2 = gyroscope_random_walk * gyroscope_random_walk * 100;   
+    const double accBiasRw2 = accelerometer_random_walk * accelerometer_random_walk * 100;  
+    const double gyrMeasError2 = gyroscope_noise_density * gyroscope_noise_density / 0.005;   
+    const double accMeasError2 = accelerometer_noise_density * accelerometer_noise_density / 0.005;   */
 
     const float keyframeTimeGapTracking = 3.0f;
 

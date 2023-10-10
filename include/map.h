@@ -46,7 +46,7 @@ class Map {
     std::unordered_map<u_long, std::shared_ptr<Frame>> keyframes_, active_keyframes_;
     
     std::shared_ptr<Frame> current_frame_ = nullptr;
-    size_t num_active_keyframes_ = 7;
+    size_t num_active_keyframes_ = 10;
 
 
  

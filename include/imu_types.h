@@ -57,8 +57,8 @@ class IMUPreIntegration {
         _delta_time = 0;
 
         // covariance of delta measurements
-        const float ng2 = settings::gyroscope_noise_density * settings::gyroscope_noise_density;
-        const float na2 = settings::accelerometer_noise_density * settings::accelerometer_noise_density;
+        const float ng2 = settings::gyrMeasError2;
+        const float na2 = settings::accMeasError2;
         mfGyrMeasCov = Matrix3d::Identity() * ng2;       // sigma_g * sigma_g / dt
         mfAccMeasCov = Matrix3d::Identity() * na2;
     }

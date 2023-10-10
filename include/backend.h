@@ -18,7 +18,11 @@ class Backend {
     void SetCameras(std::shared_ptr<Camera> left, std::shared_ptr<Camera> right) {
         camera_left_ = left;
         camera_right_ = right;
-    }    
+    }
+    void SetGravity(const Eigen::Vector3d& gravity) {
+        g_ = gravity;
+    }
+
     void UpdateMap();
     void Stop();
 
@@ -27,6 +31,8 @@ class Backend {
  private:
     void BackendLoop();
     void Optimize(std::unordered_map<u_long, std::shared_ptr<Frame>>& keyframes, std::unordered_map<u_long, std::shared_ptr<MapPoint>>& mappoints);
+    void LocalBundleAdjustment(std::unordered_map<u_long, std::shared_ptr<Frame>>& keyframes, std::unordered_map<u_long, std::shared_ptr<MapPoint>>& mappoints);
+    void LocalInertialBA(std::unordered_map<u_long, std::shared_ptr<Frame>>& keyframes, std::unordered_map<u_long, std::shared_ptr<MapPoint>>& mappoints);
 
     std::shared_ptr<Map> map_ = nullptr;
     std::shared_ptr<Camera> camera_left_ = nullptr;
@@ -39,6 +45,7 @@ class Backend {
     std::atomic_bool backend_running_;
 
     bool is_busy_ = false;
+    Eigen::Vector3d g_ = Eigen::Vector3d::Zero();
 };
 
 }  // namespace demoam
