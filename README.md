@@ -3,11 +3,11 @@ This is DEMOAM-Stereo-VIO, a stereo inertial VO code.
 It uses a LK optical flow as front-end and a sliding window bundle adjustment as a backend.
 
 # Dependencies
-Pangolin (for visualization): https://github.com/stevenlovegrove/Pangolin
-Eigen3: sudo apt-get install libeigen3-dev
-g2o: sudo apt-get install libcxsparse-dev libqt4-dev libcholmod3.0.6 libsuitesparse-dev qt4-qmake
-OpenCV: sudo apt-get install libopencv-dev
-glog (for logging): sudo apt-get install libgoogle-glog-dev
+- Pangolin (for visualization): https://github.com/stevenlovegrove/Pangolin
+- Eigen3: sudo apt-get install libeigen3-dev
+- g2o: sudo apt-get install libcxsparse-dev libqt4-dev libcholmod3.0.6 libsuitesparse-dev qt4-qmake
+- OpenCV: sudo apt-get install libopencv-dev
+- glog (for logging): sudo apt-get install libgoogle-glog-dev
 
 # Compile
 run "./recmake.sh" and "./make_run_eva.sh" to compile and run all the things, or follow the steps in such.
