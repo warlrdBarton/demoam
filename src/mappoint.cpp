@@ -12,13 +12,19 @@ std::shared_ptr<MapPoint> MapPoint::CreateNewMapPoint() {
     return new_mappoint;
 }
 
+void MapPoint::AddObservation(std::shared_ptr<Feature> feature) {
+    std::unique_lock<std::mutex> lck(data_mutex_);
+    observations_.push_back(feature);
+    if (feature->is_on_left_image_) observed_times_++;
+}
+
 void MapPoint::RemoveObservation(std::shared_ptr<Feature> feature) {
     std::unique_lock<std::mutex> lck(data_mutex_);
     for (auto iter = observations_.begin(); iter != observations_.end(); ++iter) {
         if (iter -> lock() == feature) { // Creates a new std::shared_ptr that shares ownership of the managed object. If there is no managed object, i.e. *this is empty, then the returned shared_ptr also is empty.
             observations_.erase(iter);
             feature -> mappoint_.reset();
-            observed_times_--;
+            if (feature->is_on_left_image_) observed_times_--;
             break;
         }
     }

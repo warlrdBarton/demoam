@@ -5,8 +5,12 @@
 #include "frame.h"
 #include "mappoint.h"
 #include "feature.h"
+#include "config.h"
 
 namespace demoam {
+Map::Map() {
+    num_active_keyframes_ = Config::Get<int>("WINDOW_SIZE_FOR_ACTIVE_KFS"); 
+}
 void Map::InsertKeyFrame(std::shared_ptr<Frame> frame) {
     current_frame_ = frame;
     keyframes_[frame -> keyframe_id_] = frame;

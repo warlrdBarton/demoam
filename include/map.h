@@ -10,7 +10,7 @@ class MapPoint;
 class Map {
  public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW 
-    Map(){}
+    Map();
     void InsertKeyFrame(std::shared_ptr<Frame> frame);
     void InsertMapPoint(std::shared_ptr<MapPoint> mappoint);
 

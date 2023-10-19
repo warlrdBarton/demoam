@@ -44,12 +44,12 @@ class Frontend {
     int SearchLastFrameOpticalFlow();
     int SearchInRightOpticalFlow();
     int SearchReferenceKFOpticalFlow();
+    int TrackLocalMap();
     int OptimizeCurrentPose();
     bool InsertKeyFrame();
     void SetObservationsForKeyFrame();
     int TriangulateNewPoints();
     void SaveTrajectoryKITTI();
-    int TrackLocalMap();
     void PredictCurrentPose();
     void PreintegrateIMU();
     bool IMUInitialization();
@@ -83,6 +83,7 @@ class Frontend {
     int num_features_init_ = 100;
     int num_features_tracking_good_ = 50;
     int num_features_needed_for_keyframe_ = 80;
+    float ratio_of_tracked_mp_for_new_kfs_ = 0.75f;
 
     int num_kfs_for_imu_init_ = 5;
 

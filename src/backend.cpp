@@ -275,7 +275,7 @@ void Backend::LocalInertialBA(std::unordered_map<u_long, std::shared_ptr<Frame>>
             continue;
         if (mp->is_outlier_)
             continue;
-        if (mp->observed_times_ > 1) {
+        if (mp->observed_times_ >= settings::minObsForGoodMapPoint) {
             VertexSBAPointXYZ *vXYZ = new VertexSBAPointXYZ;
             int idMP = mp->id_ + maxKFid + 1;
             vXYZ->setId(idMP);
@@ -324,7 +324,6 @@ void Backend::LocalInertialBA(std::unordered_map<u_long, std::shared_ptr<Frame>>
         }
         e->setRobustKernel(nullptr);
     }
-    LOG(INFO) << "Backend::LocalInertialBA(): PRXYZ Outlier/Inlier in optimization: " << cntPRXYZOutliers << "/" << vpEdgePoints.size() - cntPRXYZOutliers;
 
     // do it again
     optimizer.initializeOptimization();
@@ -348,15 +347,14 @@ void Backend::LocalInertialBA(std::unordered_map<u_long, std::shared_ptr<Frame>>
 
         frame->SetPoseFromIMU(SE3d(vPR->R(), vPR->t()));
         frame->SetVelocitynBias(vSpeed->estimate(), vBg->estimate(), vBa->estimate());
-        //frame->ReComputeIMUPreIntegration();
     }
     for (auto& [_, frame] : keyframes) {
-        if (_ == 0) continue;
+        if (frame->reference_KF_.expired()) continue; 
         frame->ReComputeIMUPreIntegration();
     }
     // and the points
     for (auto& [_, mp] : mappoints) {
-        if (mp && mp->is_outlier_ == false && mp->observed_times_ > 1) {
+        if (mp && mp->is_outlier_ == false && mp->observed_times_ >= settings::minObsForGoodMapPoint) {
             VertexSBAPointXYZ *v = (VertexSBAPointXYZ *) optimizer.vertex(mp->id_ + maxKFid + 1);
             mp->SetPos(v->estimate());
         }
@@ -374,7 +372,7 @@ void Backend::LocalInertialBA(std::unordered_map<u_long, std::shared_ptr<Frame>>
             feat->mappoint_.reset();
         }
     }
-    LOG(INFO) << "Set total " << cnt_outlier << vpEdgePoints.size() - cnt_outlier << " bad map points" << endl;
+    LOG(INFO) << "Backend::LocalInertialBA(): PRXYZ Outlier/Inlier in optimization: " << cnt_outlier << "/" << vpEdgePoints.size() - cntPRXYZOutliers;
 }
 
 

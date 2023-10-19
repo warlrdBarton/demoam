@@ -9,6 +9,7 @@ namespace demoam {
     
 struct Feature;
 struct MapPoint;
+struct Camera;
 
 struct Frame {
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW  
@@ -23,12 +24,14 @@ struct Frame {
 
     // --------------------------------------------------------------------
     // Getters 
-    inline Sophus::SE3d Pose() { // Tcw
+    // Tcw
+    inline Sophus::SE3d Pose() { 
         std::unique_lock<std::mutex> lck(data_mutex_);
         return pose_;
     }
 
-    inline Sophus::SE3d ImuPose() { //Twb
+    //Twb
+    inline Sophus::SE3d ImuPose() { 
         std::unique_lock<std::mutex> lck(data_mutex_);
         return pose_.inverse() * settings::Tcb;
     }
@@ -66,6 +69,7 @@ struct Frame {
         velocity_n_bias_.segment<3>(0) = velocity;
         velocity_n_bias_.segment<3>(3) = bias_g;
         velocity_n_bias_.segment<3>(6) = bias_a;
+        is_bias_updated_recently_ = true;
     }
 
     inline void SetVelocity(const Eigen::Vector3d &velocity) {
@@ -76,17 +80,21 @@ struct Frame {
     inline void SetBiasG(const Vector3d &bias_g) {
         std::unique_lock<std::mutex> lck(data_mutex_);
         velocity_n_bias_.segment<3>(3) = bias_g;
+        is_bias_updated_recently_ = true;
     }
 
     inline void SetBiasA(const Eigen::Vector3d &bias_a) {
         std::unique_lock<std::mutex> lck(data_mutex_);
         velocity_n_bias_.segment<3>(6) = bias_a;
+        is_bias_updated_recently_ = true;
     }
 
     const auto& GetIMUPreInt() { return imu_preintegrator_from_RefKF_; }
 
     // count the well tracked map points in this frame
     int TrackedMapPoints(const int &minObs);
+
+    bool isInFrustum(std::shared_ptr<MapPoint> pMP, std::shared_ptr<Camera> pCam, float viewingCosLimit, int boarder);
  
     // --------------------------------------------------------------------
     // Data
@@ -98,6 +106,7 @@ struct Frame {
     unsigned long keyframe_id_ = 0;
 
     bool is_keyframe_ = false;
+    bool is_bias_updated_recently_ = true;
 
     std::weak_ptr<Frame> reference_KF_;
     

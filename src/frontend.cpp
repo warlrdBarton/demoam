@@ -13,7 +13,6 @@
 #include "feature.h"
 #include "viewer.h"
 
-
 namespace demoam {
 Frontend::Frontend() {
     fast_detector_ = cv::FastFeatureDetector::create(Config::Get<int>("threshold_fast_detector"), true);
@@ -24,6 +23,8 @@ Frontend::Frontend() {
     num_features_needed_for_keyframe_ = Config::Get<int>("num_features_needed_for_keyframe");
 
     num_kfs_for_imu_init_ = Config::Get<int>("NUM_KFs_FOR_IMU_INIT");
+
+    ratio_of_tracked_mp_for_new_kfs_ = Config::Get<float>("RATIO_OF_TRACKED_MP_FOR_NEW_KFS");
 
     save_to_file_.open("./traj.txt", std::ios::trunc);
 }
@@ -63,6 +64,8 @@ bool Frontend::AddFrame(std::shared_ptr<Frame> frame) {
     if (status_ == FrontendStatus::OK) {
         last_frame_ = current_frame_;
     }
+
+    //if (map_->isImuInitialized()) cv::waitKey(0);
 
     return status_ != FrontendStatus::LOST;
     //return true;
@@ -365,15 +368,20 @@ bool Frontend::InsertKeyFrame() {
     }
 
     // Condition 0: tracking is weak
-    bool c0 = tracking_inliers_ <= num_features_needed_for_keyframe_;
+    bool c0 = tracking_inliers_ < num_features_needed_for_keyframe_;
+    LOG(INFO) << "Frontend::InsertKeyFrame(): c0 : " << "num_features_needed_for_keyframe_ = " << num_features_needed_for_keyframe_ << " tracking_inliers_ = " << tracking_inliers_;
 
     // Condition 1: Few tracked points compared to reference keyframe.
-    int nRefMatches = last_keyframe_->TrackedMapPoints(2); // matches in reference KeyFrame
-    bool c1 = (tracking_inliers_ < nRefMatches * 0.3);
+    int nRefMatches = last_keyframe_->TrackedMapPoints(settings::minObsForGoodMapPoint); // matches in reference KeyFrame
+    int curMatches = current_frame_->TrackedMapPoints(settings::minObsForGoodMapPoint); // matches in current KeyFrame
+    bool c1 = (curMatches < nRefMatches * ratio_of_tracked_mp_for_new_kfs_);
+    LOG(INFO) << "Frontend::InsertKeyFrame(): nRefMatches = " << nRefMatches << ", curMatches = " << curMatches;
 
     // TimeGap from last keyframe
-    double timegap = settings::keyframeTimeGapTracking;
-    bool cTimeGap = (current_frame_->time_stamp_ - last_keyframe_->time_stamp_) >= timegap;
+    double timegap = Config::Get<double>("keyframeTimeGapTracking");
+    bool cTimeGap = (current_frame_->time_stamp_ - last_keyframe_->time_stamp_) > timegap;
+
+    LOG(INFO) << "Frontend::InsertKeyFrame(): timegap = " << timegap << ", cTimeGap = " << (current_frame_->time_stamp_ - last_keyframe_->time_stamp_);
 
     if (!(c0 || c1 || cTimeGap) || backend_->IsCurrentlyBusy()) {
         return false;
@@ -463,31 +471,31 @@ int Frontend::TrackLocalMap() {
     // TODO: TrackLocalMap
     return tracking_inliers_;
     /*
+
     std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
     auto localmap = map_->GetActiveMapPoints();
     std::chrono::steady_clock::time_point t4 = std::chrono::steady_clock::now();
     double timeCost = std::chrono::duration_cast<std::chrono::duration<double> >(t4 - t1).count();
     LOG(INFO) << "Frontend::TrackLocalMap(): get local map points cost time: " << timeCost << endl;
 
-    for (auto mp : localmap)
-        if (mp)
-            mp->mbTrackInView = false;
-    for (auto feat: mpCurrentFrame->mFeaturesLeft)
-        if (feat && feat->mpPoint && feat->mbOutlier == false)
-            feat->mpPoint->mbTrackInView = true;
-    // 筛一下视野内的点
-    set<shared_ptr<MapPoint> > mpsInView;
-    for (auto &mp: localmap) {
-        if (mp && mp->isBad() == false && mp->mbTrackInView == false && mpCurrentFrame->isInFrustum(mp, 0.5)) {
+    for (auto& [_, mp] : localmap) {
+        if (mp) mp->is_track_in_view_ = false;
+    }
+    for (auto& feat: current_frame_->features_left_) {
+        if (feat && !feat->mappoint_.expired() && feat->is_outlier_ == false)
+            feat->mappoint_.lock()->is_track_in_view = true;
+    }
+    std::set<shared_ptr<MapPoint> > mpsInView;
+    for (auto& [_, mp] : localmap) {
+        if (mp && mp->is_outlier_ == false && mp->is_track_in_view == false && current_frame_->isInFrustum(mp, camera_left_, 0.5)) {
             mpsInView.insert(mp);
         }
     }
     if (mpsInView.empty())
-        return tracking_inliers_ >= setting::minTrackLocalMapInliers;
+        return tracking_inliers_;
     LOG(INFO) << "Call Search by direct projection" << endl;
-    int cntMatches = mpMatcher->SearchByDirectProjection(mpCurrentFrame, mpsInView);
-    LOG(INFO) << "Track local map matches: " << cntMatches << ", current features: "
-              << mpCurrentFrame->mFeaturesLeft.size() << endl;
+    int cntMatches = mpMatcher->SearchByDirectProjection(current_frame_, mpsInView);
+    LOG(INFO) << "Track local map matches: " << cntMatches << ", current features: " << current_frame_->features_left.size();
     std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
     timeCost = std::chrono::duration_cast<std::chrono::duration<double> >(t2 - t1).count();
     LOG(INFO) << "Search local map points cost time: " << timeCost << endl;
@@ -495,7 +503,7 @@ int Frontend::TrackLocalMap() {
     int optinliers = OptimizeCurrentPose();
     // Update MapPoints Statistics
     tracking_inliers_ = 0;
-    for (shared_ptr<Feature> feat : mpCurrentFrame->mFeaturesLeft) {
+    for (shared_ptr<Feature> feat : current_frame_->mFeaturesLeft) {
         if (feat->mpPoint) {
             if (!feat->mbOutlier) {
                 feat->mpPoint->IncreaseFound();
@@ -514,7 +522,9 @@ int Frontend::TrackLocalMap() {
         return false;
     else
         return true;
+
     */
+   
 
 }
 
@@ -547,34 +557,39 @@ void Frontend::PredictCurrentPose() {
     current_frame_->SetPose(TCW);
     current_frame_->SetVelocity(Vwb);
 
-    {//TODO: BLUE Predicion flies away
+    {
         if (viewer_) viewer_ -> AddCurrentFrame(current_frame_);
     }
 
 }
 
 void Frontend::PreintegrateIMU() { 
-    if (last_keyframe_ == nullptr || current_frame_->imu_meas_.empty()) {
+    if (last_keyframe_ == nullptr || last_frame_ == nullptr || current_frame_->imu_meas_.empty()) {
         return;
         // like the first frame 
     }
+    Vector3d bg = last_keyframe_->BiasG();
+    Vector3d ba = last_keyframe_->BiasA();
+
     imu_meas_since_RefKF_.insert(imu_meas_since_RefKF_.end(), 
                                    current_frame_->imu_meas_.begin(), 
                                    current_frame_->imu_meas_.end());
 
-    const auto& imu = current_frame_->imu_meas_;
-    Vector3d bg = last_keyframe_->BiasG();
-    Vector3d ba = last_keyframe_->BiasA();
-
-    {   // consider the gap between the last KF and the first IMU
-        // delta time
-        double dt = std::max(0., imu[0].timestamp_ - last_frame_->time_stamp_);
-        // update pre-integrator  
+    std::vector<IMU, Eigen::aligned_allocator<IMU>>imu;
+    
+    // deal with the gap between the last KF(or lastframe) and the first IMU
+    if (last_keyframe_->is_bias_updated_recently_ == true) { // recompute imu pre-integration if BIAS is updated recently
+        imu_preintegrator_from_RefKF_->reset();
+        imu = imu_meas_since_RefKF_;
+        double dt = std::max(0., imu[0].timestamp_ - last_keyframe_->time_stamp_);
         imu_preintegrator_from_RefKF_->update(imu[0].gyro_ - bg, imu[0].acce_ - ba, dt);
-        
+    } else {
+        imu = current_frame_->imu_meas_;
+        double dt = std::max(0., imu[0].timestamp_ - last_frame_->time_stamp_);
+        imu_preintegrator_from_RefKF_->update(imu[0].gyro_ - bg, imu[0].acce_ - ba, dt);
     }
 
-    for (size_t i = 0; i < current_frame_->imu_meas_.size(); i++) {
+    for (size_t i = 0; i < imu.size(); i++) {
         double nextt;
         if (i == imu.size() - 1)
             nextt = current_frame_->time_stamp_;
@@ -585,7 +600,8 @@ void Frontend::PreintegrateIMU() {
         // update pre-integrator      
         imu_preintegrator_from_RefKF_->update(imu[i].gyro_ - bg, imu[i].acce_ - ba, dt);
     }
-    
+
+    last_keyframe_->is_bias_updated_recently_ = false;
 }
 
 bool Frontend::IMUInitialization() {

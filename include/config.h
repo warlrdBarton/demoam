@@ -7,6 +7,9 @@
 namespace demoam {
 namespace settings {
 
+    const float minPointDis = 0.5;
+    const float maxPointDis = 30;
+
     const float GRAVITY_VALUE = 9.81;
     const float eps = 1e-4;
 
@@ -24,8 +27,8 @@ namespace settings {
     const double accBiasRw2 = accelerometer_random_walk * accelerometer_random_walk * 100;  
     const double gyrMeasError2 = gyroscope_noise_density * gyroscope_noise_density / 0.005;   
     const double accMeasError2 = accelerometer_noise_density * accelerometer_noise_density / 0.005;   */
-
-    const float keyframeTimeGapTracking = 3.0f;
+    
+    const int minObsForGoodMapPoint = 2;
 
     const Sophus::SE3d Tcb = []{
         Sophus::SE3d Tvi, Tiv; // per Kitti calibration

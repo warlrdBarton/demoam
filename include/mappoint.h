@@ -3,6 +3,7 @@
 
 #include "common_include.h"
 
+
 namespace demoam {
 
 struct Frame;
@@ -27,15 +28,12 @@ struct MapPoint {
         std::unique_lock<std::mutex> lck(data_mutex_);
         return observations_;
     }
-    void AddObservation(std::shared_ptr<Feature> feature) {
-        std::unique_lock<std::mutex> lck(data_mutex_);
-        observations_.push_back(feature);
-        observed_times_++;
-    }
+    void AddObservation(std::shared_ptr<Feature> feature);
     void RemoveObservation(std::shared_ptr<Feature> feature);
     
     unsigned long id_ = 0;
     bool is_outlier_ = false;
+    bool is_track_in_view_ = false;
     Eigen::Vector3d pos_ = Eigen::Vector3d::Zero();
     std::mutex  data_mutex_;
     int observed_times_ = 0;

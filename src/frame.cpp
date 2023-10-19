@@ -1,6 +1,7 @@
 #include "frame.h"
 #include "feature.h"
 #include "mappoint.h"
+#include "camera.h"
 
 namespace demoam {
     
@@ -19,6 +20,7 @@ void Frame::SetKeyFrame() {
 
 void Frame::ReComputeIMUPreIntegration() {
     if (reference_KF_.expired()) return;
+    if (imu_preintegrator_from_RefKF_ != nullptr && reference_KF_.lock()->is_bias_updated_recently_ == false) return; // bias updated, no need to recompute;
     imu_preintegrator_from_RefKF_->reset();
 
     Vector3d bg = reference_KF_.lock()->BiasG();
@@ -41,6 +43,8 @@ void Frame::ReComputeIMUPreIntegration() {
         // update pre-integrator
         imu_preintegrator_from_RefKF_->update(imu_meas_[i].gyro_ - bg, imu_meas_[i].acce_ - ba, dt);
     }
+
+    reference_KF_.lock()->is_bias_updated_recently_ = false; // imu preintegration with new bias is done 
 }
 
 int Frame::TrackedMapPoints(const int &minObs) {
@@ -63,6 +67,30 @@ int Frame::TrackedMapPoints(const int &minObs) {
         }
     }
     return nPoints;
+}
+
+bool Frame::isInFrustum(std::shared_ptr<MapPoint> pMP, std::shared_ptr<Camera> pCam, float viewingCosLimit, int boarder = 20) {
+    auto pw = pMP->Pos();
+    const Vector3d pc = pCam->world2camera(pw, this->Pose());
+    const float pcx = pc[0], pcy = pc[1], pcz = pc[2];
+    
+    // Checking depth
+    if (pcz < settings::minPointDis || pcz > settings::maxPointDis) {
+        return false;
+    }
+
+    auto px = pCam->camera2pixel(pc);
+    const float u = px[0], v = px[1];
+    int imageWidth = img_left_.cols, imageHeight = img_left_.rows;
+    if (u < boarder || u > (imageWidth - boarder))
+        return false;
+    if (v < boarder || v > (imageHeight - boarder))
+        return false;
+
+/*     auto twc = (this->Pose()).inverse().translation().matrix();
+    const float dist = (pw - twc).norm(); */
+
+    return true;
 }
 
 } // namespace demoam
