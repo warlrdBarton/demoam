@@ -20,8 +20,7 @@ NUM_KFs_FOR_IMU_INIT: 5
 WINDOW_SIZE_FOR_ACTIVE_KFS: 10
 RATIO_OF_TRACKED_MP_FOR_NEW_KFS: 0.75
 
-keyframeTimeGapTracking: 3.0
-
+keyframeTimeGapTracking: 0.5
 
 threshold_fast_detector: 50
 num_features_init: 100

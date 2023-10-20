@@ -374,8 +374,9 @@ bool Frontend::InsertKeyFrame() {
     // Condition 1: Few tracked points compared to reference keyframe.
     int nRefMatches = last_keyframe_->TrackedMapPoints(settings::minObsForGoodMapPoint); // matches in reference KeyFrame
     int curMatches = current_frame_->TrackedMapPoints(settings::minObsForGoodMapPoint); // matches in current KeyFrame
-    bool c1 = (curMatches < nRefMatches * ratio_of_tracked_mp_for_new_kfs_);
+    bool c1 = (curMatches < nRefMatches * ratio_of_tracked_mp_for_new_kfs_) || (curMatches > nRefMatches);
     LOG(INFO) << "Frontend::InsertKeyFrame(): nRefMatches = " << nRefMatches << ", curMatches = " << curMatches;
+    LOG(INFO) << "ref feat: " << last_keyframe_->features_left_.size() << ", cur feat: " << current_frame_->features_left_.size();
 
     // TimeGap from last keyframe
     double timegap = Config::Get<double>("keyframeTimeGapTracking");
@@ -383,9 +384,15 @@ bool Frontend::InsertKeyFrame() {
 
     LOG(INFO) << "Frontend::InsertKeyFrame(): timegap = " << timegap << ", cTimeGap = " << (current_frame_->time_stamp_ - last_keyframe_->time_stamp_);
 
-    if (!(c0 || c1 || cTimeGap) || backend_->IsCurrentlyBusy()) {
+    bool cLocalMappingIdle = !backend_->IsCurrentlyBusy();
+    LOG(INFO) << "Frontend::InsertKeyFrame(): cLocalMappingIdle = " << cLocalMappingIdle;
+
+    if ((c0 || c1 || cTimeGap) && cLocalMappingIdle) {
+        // keep going
+    } else {
         return false;
     }
+
     
     current_frame_ -> SetKeyFrame();
     current_frame_->imu_preintegrator_from_RefKF_ = imu_preintegrator_from_RefKF_;
@@ -640,7 +647,6 @@ bool Frontend::IMUInitialization() {
     Matrix3d I3 = Matrix3d::Identity();
     for (int i = 0; i < N - 2; i++) {
 
-        // 三个帧才能建立加速度约束
         std::shared_ptr<Frame> pKF1 = vpKFs[i];
         std::shared_ptr<Frame> pKF2 = vpKFs[i + 1];
         std::shared_ptr<Frame> pKF3 = vpKFs[i + 2];
@@ -664,7 +670,6 @@ bool Frontend::IMUInitialization() {
         Matrix3d Jvba12 = pKF2->GetIMUPreInt()->getJVBiasa();
         Matrix3d Jpba23 = pKF3->GetIMUPreInt()->getJPBiasa();
 
-        // 谜之计算
         Matrix3d lambda = 0.5 * (dt12 * dt12 * dt23 + dt12 * dt23 * dt23) * I3;
         Vector3d phi = R2 * Jpba23 * baPrior * dt12 -
                        R1 * Jpba12 * baPrior * dt23 +
@@ -693,7 +698,6 @@ bool Frontend::IMUInitialization() {
 
     for (int i = 0; i < N - 2; i++) {
 
-        // 三个帧才能建立加速度约束
         std::shared_ptr<Frame> pKF1 = vpKFs[i];
         std::shared_ptr<Frame> pKF2 = vpKFs[i + 1];
         std::shared_ptr<Frame> pKF3 = vpKFs[i + 2];
@@ -717,7 +721,6 @@ bool Frontend::IMUInitialization() {
         Matrix3d Jvba12 = pKF2->GetIMUPreInt()->getJVBiasa();
         Matrix3d Jpba23 = pKF3->GetIMUPreInt()->getJPBiasa();
 
-        // 谜之计算
         Vector3d lambda = 0.5 * (dt12 * dt12 * dt23 + dt12 * dt23 * dt23) * I3 * g0;
         Matrix3d phi = R2 * Jpba23 * dt12 -
                        R1 * Jpba12 * dt23 +

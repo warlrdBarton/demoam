@@ -187,7 +187,6 @@ void Backend::LocalInertialBA(std::unordered_map<u_long, std::shared_ptr<Frame>>
         } 
     }
 
-    // 关键帧之间的边
     vector<EdgePRV *> vpEdgePRV;
     vector<EdgeBiasG *> vpEdgeBg;
     vector<EdgeBiasA *> vpEdgeBa;
@@ -221,7 +220,7 @@ void Backend::LocalInertialBA(std::unordered_map<u_long, std::shared_ptr<Frame>>
         ePRV->setMeasurement(M);
         // set Covariance
         Matrix9d CovPRV = M.getCovPVPhi();
-        // 但是Edge里用是P,R,V，所以交换顺序
+        // Edge using PRV, so swap the order
         CovPRV.col(3).swap(CovPRV.col(6));
         CovPRV.col(4).swap(CovPRV.col(7));
         CovPRV.col(5).swap(CovPRV.col(8));
@@ -235,7 +234,7 @@ void Backend::LocalInertialBA(std::unordered_map<u_long, std::shared_ptr<Frame>>
         optimizer.addEdge(ePRV);
         vpEdgePRV.push_back(ePRV);
 
-        // bias 的随机游走，用两条边来约束
+        // bias random walk, constrainted with two edges
         double dt = M.getDeltaTime();
 
         EdgeBiasG *eBG = new EdgeBiasG();
